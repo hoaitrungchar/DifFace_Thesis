@@ -72,12 +72,11 @@ def scan_files_from_folder(dir_paths, exts, recursive=True):
         dir_pathas: str or list.
         exts: list
     '''
-    exts = [exts, ] if not isinstance(exts, list) else exts
     dir_paths = [dir_paths, ] if not isinstance(dir_paths, list) else dir_paths
 
     file_paths = []
     for current_dir in dir_paths:
-        current_dir = Path(current_dir) if not isinstance(current_dir, Path) else current_dir
+        current_ext = Path(current_dir) if not isinstance(current_dir, Path) else current_dir
         for current_ext in exts:
             if recursive:
                 search_flag = f"**/*.{current_ext}"

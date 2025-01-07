@@ -1041,3 +1041,27 @@ if __name__ == '__main__':
     mean_error = np.abs(grad1 -grad2).mean()
     print('The largest error is {:.2e}'.format(error))
     print('The mean error is {:.2e}'.format(mean_error))
+
+
+
+def getpriorcanny(path, belowrange, overrange, dtype='float32'):
+    '''
+    Read image.
+    chn: 'rgb', 'bgr' or 'gray'
+    out:
+        im: h x w x c, numpy tensor
+    '''
+    im = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)  # BGR, uint8
+    im = cv2.Canny(im,100,200)
+
+    if dtype == 'float32':
+        im = im.astype(np.float32) / 255.
+    elif dtype ==  'float64':
+        im = im.astype(np.float64) / 255.
+    elif dtype == 'uint8':
+        pass
+    else:
+        sys.exit('Please input corrected dtype: float32, float64 or uint8!')
+    h,w =im.shape
+    im=im.reshape(1,h,w)
+    return im

@@ -70,6 +70,8 @@ def create_dataset(dataset_config):
         dataset = RealESRGANDataset(dataset_config['params'])
     elif dataset_config['type'] == 'inpainting':
         dataset = InpaintingDataSet(**dataset_config['params'])
+    elif dataset_config['type'] == 'blindinpainting':
+        dataset = BlindInpaintingDataSet(**dataset_config['params'])
     else:
         raise NotImplementedError(dataset_config['type'])
 
@@ -232,3 +234,88 @@ class InpaintingDataSet(Dataset):
     def reset_dataset(self):
         self.file_paths = random.sample(self.file_paths_all, self.length)
 
+
+
+class BlindInpaintingDataSet(Dataset):
+    def __init__(
+            self,
+            dir_path,
+            noise_path1,
+            noise_path2,
+            transform_type,
+            transform_kwargs,
+            mask_kwargs,
+            length=None,
+            need_path=False,
+            im_exts=['png', 'jpg', 'jpeg', 'JPEG', 'bmp'],
+            recursive=False,
+            recursive_noise1=False,
+            recursive_noise2=False,
+            type_prior=None
+            ):
+        super().__init__()
+
+        file_paths_all = util_common.scan_files_from_folder(dir_path, im_exts, recursive)
+        print('len_file_path_all',len(file_paths_all))
+        self.file_paths = file_paths_all if length is None else random.sample(file_paths_all, length)
+        self.file_paths_all = file_paths_all
+        self.type_prior = type_prior
+        self.length = length
+        self.need_path = need_path
+        self.transform = get_transforms(transform_type, transform_kwargs)
+        self.mask_generator = MixedMaskGenerator(**mask_kwargs)
+        self.iter_i = 0
+        self.noise_path1 = []
+        self.noise_path2 = []
+        if not self.noise_path1 is None and not self.noise_path2 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        elif not self.noise_path1 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+        elif not self.noise_path2 is None:
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        print(len(self.noise_path1))
+        print(len(self.noise_path2))
+        self.file_paths_noise=self.noise_path1+self.noise_path2
+        print('len_file_paths_noise',len(self.file_paths_noise))
+        self.transform_noise_edge = thv.transforms.Compose([
+                thv.transforms.Resize((256, 256)), 
+            ])
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, index):
+        im_path = self.file_paths[index]
+        noise_path = self.file_paths_noise[index]
+        im = util_image.imread(im_path, chn='rgb', dtype='float32')
+        im = self.transform(im)        # c x h x w
+        out_dict = {'gt':im, }
+
+        noise = util_image.imread(noise_path, chn='rgb', dtype='float32')
+        noise = self.transform(noise)
+        noise = self.transform_noise_edge(noise) 
+        if not (self.type_prior is None):
+            if self.type_prior == 'edge':
+                edge_img=util_image.getpriorcanny(im_path,100,200)
+                edge_img = torch.tensor(edge_img)
+                out_dict['prior']= edge_img
+        mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
+        self.iter_i += 1
+        mask = torch.tensor(mask)
+        mask_reshape=mask
+        if mask.shape[0] == 1:
+            mask_reshape = mask.expand(3, -1, -1)  # Expand along the channel dimension
+        mask_reshape = mask_reshape.to(im.device, dtype=im.dtype)
+        
+        im_masked = im *  (1 - mask_reshape) +mask_reshape*noise
+        out_dict['lq'] = im_masked
+        out_dict['mask'] = mask
+        
+        if self.need_path:
+            out_dict['path'] = im_path
+        # print(out_dict['lq'].shape, out_dict['lq'].shape,  out_dict['mask'] .shape)
+        return out_dict
+
+    def reset_dataset(self):
+        self.file_paths = random.sample(self.file_paths_all, self.length)

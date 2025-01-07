@@ -6,7 +6,7 @@ import math
 import random
 import hashlib
 from enum import Enum
-
+from scipy import ndimage, misc
 import cv2
 import numpy as np
 
@@ -312,6 +312,40 @@ class AlterLineMaskGenerator:
 
         return mask
 
+class CAMask:
+    def __init__(self):
+        pass
+
+    def __call__(self, img, iter_i=None, raw_image=None):
+        """
+        img: c x h x w, torch tensor
+        """
+        h, w = img.shape[1:]
+        scale = random.choice([1, 2, 4])
+        r = random.randint(2, 5) # repeat median filter r times
+        height = h
+        width = w
+        mask = np.random.randint(2, size = (height//scale, width//scale))
+
+        for _ in range(r):
+            mask = ndimage.median_filter(mask, size=3, mode='constant')
+
+        # mask = misc.imresize(mask, (h, w), interp='nearest')
+        mask = cv2.resize(mask, dsize=(w, h), interpolation=cv2.INTER_NEAREST)
+     
+        if scale > 1:
+            struct = ndimage.generate_binary_structure(2, 1)
+            mask = ndimage.morphology.binary_dilation(mask, struct)
+        elif scale > 3:
+            struct = np.array([[ 0.,  0.,  1.,  0.,  0.],
+                            [ 0.,  1.,  1.,  1.,  0.],
+                            [ 1.,  1.,  1.,  1.,  1.],
+                            [ 0.,  1.,  1.,  1.,  0.],
+                            [ 0.,  0.,  1.,  0.,  0.]])
+        mask=mask.astype(np.float32)
+        mask=mask.reshape(1,h,w)
+        return mask
+
 class MixedMaskGenerator:
     def __init__(self, irregular_proba=1/3, irregular_kwargs=None,
                  box_proba=1/3, box_kwargs=None,
@@ -320,6 +354,7 @@ class MixedMaskGenerator:
                  outpainting_proba=0, outpainting_kwargs=None,
                  expand_proba=0, expand_kwargs=None,
                  half_proba=0, half_kwargs=None,
+                 ca_proba=0, ca_kwargs=None,
                  alterline_proba=0,
                  invert_proba=0):
         self.probas = []
@@ -372,6 +407,12 @@ class MixedMaskGenerator:
             if half_kwargs is None:
                 half_kwargs = {}
             self.gens.append(HalfMaskGenerator(**half_kwargs))
+
+        if ca_proba > 0:
+            self.probas.append(ca_proba)
+            if ca_kwargs is None:
+                ca_kwargs = {}
+            self.gens.append(CAMask(**ca_kwargs))
 
         if alterline_proba > 0:
             self.probas.append(alterline_proba)
