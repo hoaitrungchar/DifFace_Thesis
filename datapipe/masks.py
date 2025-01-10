@@ -9,6 +9,9 @@ from enum import Enum
 from scipy import ndimage, misc
 import cv2
 import numpy as np
+import os
+from utils import util_image
+from utils import util_common
 
 # from saicinpainting.evaluation.masks.mask import SegmentationMask
 # from saicinpainting.utils import LinearRamp
@@ -290,7 +293,6 @@ class HalfMaskGenerator:
             mask[:, int(h*self.masking_percent):, ] = 1
         else:
             mask[:, :, int(w*self.masking_percent):, ] = 1
-
         return mask
 
 class AlterLineMaskGenerator:
@@ -345,6 +347,32 @@ class CAMask:
         mask=mask.astype(np.float32)
         mask=mask.reshape(1,h,w)
         return mask
+    
+class IrregularNvidiaMask:
+    def __init__(self, folder_mask_path):
+        self.folder_mask_path = folder_mask_path
+        self.list_mask_path = self.generate_list_image()
+    
+    def generate_list_image(self):
+        list_folder_path=list(map(lambda x: os.path.join(self.folder_mask_path,x),os.listdir(self.folder_mask_path)))
+        list_image_path=[]
+        for folder in list_folder_path:
+            if not os.path.isdir(folder):
+                continue
+            list_image_path+=list(map(lambda x: os.path.join(folder,x),os.listdir(folder)))
+        return list_image_path
+    def __call__(self, img, iter_i=None, raw_image=None):
+        """
+        img: c x h x w, torch tensor
+        """
+        h, w = img.shape[1:]
+        index = random.randint(0,len(self.list_mask_path)-1)
+        mask = util_image.imread(self.list_mask_path[index],chn='gray',dtype='float32')
+        mask = np.where(mask>0.5, 0,1)
+        mask = np.resize(mask,(h,w))
+        mask = mask.reshape(1,h,w)
+        mask=mask.astype(np.float32)
+        return mask
 
 class MixedMaskGenerator:
     def __init__(self, irregular_proba=1/3, irregular_kwargs=None,
@@ -355,6 +383,7 @@ class MixedMaskGenerator:
                  expand_proba=0, expand_kwargs=None,
                  half_proba=0, half_kwargs=None,
                  ca_proba=0, ca_kwargs=None,
+                 nvidia_mask_proba=0, nvidia_mask_kwargs=None,
                  alterline_proba=0,
                  invert_proba=0):
         self.probas = []
@@ -413,6 +442,12 @@ class MixedMaskGenerator:
             if ca_kwargs is None:
                 ca_kwargs = {}
             self.gens.append(CAMask(**ca_kwargs))
+
+        if nvidia_mask_proba > 0:
+            self.probas.append(nvidia_mask_proba)
+            if nvidia_mask_kwargs is None:
+                nvidia_mask_kwargs = {}
+            self.gens.append(IrregularNvidiaMask(**nvidia_mask_kwargs))
 
         if alterline_proba > 0:
             self.probas.append(alterline_proba)

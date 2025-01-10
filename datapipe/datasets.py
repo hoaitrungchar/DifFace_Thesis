@@ -2,7 +2,7 @@ import random
 import numpy as np
 from pathlib import Path
 from einops import rearrange
-
+import random
 import torch
 import torchvision as thv
 from torch.utils.data import Dataset
@@ -287,7 +287,7 @@ class BlindInpaintingDataSet(Dataset):
 
     def __getitem__(self, index):
         im_path = self.file_paths[index]
-        noise_path = self.file_paths_noise[index]
+        noise_path = self.file_paths_noise[random.randint(0,len(self.file_paths_noise)-1)]
         im = util_image.imread(im_path, chn='rgb', dtype='float32')
         im = self.transform(im)        # c x h x w
         out_dict = {'gt':im, }
