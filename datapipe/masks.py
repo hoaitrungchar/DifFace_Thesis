@@ -368,8 +368,10 @@ class IrregularNvidiaMask:
         h, w = img.shape[1:]
         index = random.randint(0,len(self.list_mask_path)-1)
         mask = util_image.imread(self.list_mask_path[index],chn='gray',dtype='float32')
-        mask = np.where(mask>0.5, 0,1)
-        mask = np.resize(mask,(h,w))
+        mask=cv2.bitwise_not(mask)
+        mask = cv2.resize(mask, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
+        mask=mask/255
+        mask= np.where(mask<0.5, 0, 1)
         mask = mask.reshape(1,h,w)
         mask=mask.astype(np.float32)
         return mask
