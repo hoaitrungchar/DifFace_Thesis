@@ -61,6 +61,10 @@ data:
           right_padding_prob: 0.5
           bottom_padding_prob: 0.5
         ca_proba: 1
+        half_proba: 1
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: /data/FFHQ/irregular_mask/train
       type_prior: edge
   val:
     type: blindinpainting 
@@ -101,21 +105,25 @@ data:
           right_padding_prob: 0.5
           bottom_padding_prob: 0.5
         ca_proba: 1
+        half_proba: 1
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: /data/FFHQ/irregular_mask/test
       type_prior: edge
 train:
   lr: 1e-4
   lr_min: 5e-6
-  batch: [128, 128]   # batchsize for training and validation
-  microbatch: 128
+  batch: [64, 64]   # batchsize for training and validation
+  microbatch: 64
   num_workers: 8
   prefetch_factor: 2
   iterations: 500000
   weight_decay: 0
-  save_freq: 10000
+  save_freq: 1
   val_freq: ${train.save_freq}
-  log_freq: [100, 200, 5]
+  log_freq: [200, 200, 5]
   ema_rate: 0.999
-  loss_type: L2
+  loss_type: WCE
   tf_logging: True
   local_logging: True
 
