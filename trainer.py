@@ -8,6 +8,7 @@ import math
 import time
 import lpips
 import random
+import copy
 import datetime
 import functools
 import numpy as np
@@ -392,6 +393,18 @@ class TrainerBase:
         else:
             pass
 
+    def calculate_L2_gradient(self):
+        total_norm = 0.0
+        for param in self.model.parameters():
+            if param.grad is not None:
+                # Compute the L2 norm of this parameter's gradient
+                param_norm = param.grad.data.norm(2)  # L2 norm for this parameter
+                total_norm += param_norm.item() ** 2
+
+        # Compute the overall L2 norm across all gradients
+        total_norm = total_norm ** 0.5
+        return total_norm
+
     def update_ema_model(self):
         if self.num_gpus > 1:
             dist.barrier()
@@ -768,6 +781,269 @@ class TrainerDiffusionFace(TrainerBase):
                 nrow=len(indices),
                 )
 
+class TrainerDiffusion(TrainerBase):
+    def build_model(self):
+        super().build_model()
+        params = self.configs.diffusion.get('params', dict)
+        self.base_diffusion = util_common.get_obj_from_str(self.configs.diffusion.target)(**params)
+        self.sample_scheduler_diffusion = UniformSampler(self.base_diffusion.num_timesteps)
+
+    def training_step(self, data):
+        current_batchsize = data['gt'].shape[0]
+        micro_batchsize = self.configs.train.microbatch
+        num_grad_accumulate = math.ceil(current_batchsize / micro_batchsize)
+
+        if self.configs.train.use_fp16:
+            scaler = amp.GradScaler()
+
+        self.optimizer.zero_grad()
+        for jj in range(0, current_batchsize, micro_batchsize):
+            micro_data = {key:value[jj:jj+micro_batchsize,] for key, value in data.items()}
+            last_batch = (jj+micro_batchsize >= current_batchsize)
+            tt, weights = self.sample_scheduler_diffusion.sample(
+                    micro_data['gt'].shape[0],
+                    device=f"cuda:{self.rank}",
+                    use_fp16=self.configs.train.use_fp16
+                    )
+            compute_losses = functools.partial(
+                self.base_diffusion.training_losses,
+                self.model,
+                micro_data['lq'],
+                tt,
+                model_kwargs={
+                    'mask': micro_data['mask'],
+                    'prior': micro_data['prior']
+                },
+            )
+            if self.configs.train.use_fp16:
+                with amp.autocast():
+                    if last_batch or self.num_gpus <= 1:
+                        losses = compute_losses()
+                    else:
+                        with self.model.no_sync():
+                            losses = compute_losses()
+
+                #compute loss for mask and prior
+                bce_loss = torch.nn.functional.binary_cross_entropy_with_logits
+                mse_loss = torch.nn.functional.mse_loss
+                loss_mask = bce_loss(losses['mask'],micro_data['mask'])
+                if self.configs.train.prior=='edege':
+                    loss_prior = bce_loss(losses['prior'],micro_data['prior'])
+                elif self.configs.train.prior in ['segmentation','gradient']:
+                    loss_prior = mse_loss(losses['prior'],micro_data['prior'])
+                total_loss = loss + self.config.train.lambda_loss_mask*loss_mask + self.config.train.lambda_loss_prior*loss_prior
+                losses['mask_loss'] = loss_mask
+                losses['prior_loss'] = loss_prior
+                losses['total_loss'] = total_loss
+                loss = (losses["total_loss"] * weights).mean() / num_grad_accumulate
+                scaler.scale(loss).backward()
+            else:
+                if last_batch or self.num_gpus <= 1:
+                    losses = compute_losses()
+                else:
+                    with self.model.no_sync():
+                        losses = compute_losses()
+
+                #compute loss for mask and prior
+                bce_loss = torch.nn.functional.binary_cross_entropy_with_logits
+                mse_loss = torch.nn.functional.mse_loss
+                loss_mask = bce_loss(losses['mask'],micro_data['mask'])
+                if self.configs.train.prior=='edege':
+                    loss_prior = bce_loss(losses['prior'],micro_data['prior'])
+                elif self.configs.train.prior in ['segmentation','gradient']:
+                    loss_prior = mse_loss(losses['prior'],micro_data['prior'])
+                total_loss = loss + self.config.train.lambda_loss_mask*loss_mask + self.config.train.lambda_loss_prior*loss_prior
+                losses['mask_loss'] = loss_mask
+                losses['prior_loss'] = loss_prior
+                losses['total_loss'] = total_loss
+
+                loss = (losses["loss"] * weights).mean() / num_grad_accumulate
+                loss.backward()
+            
+
+            # make logging
+            self.log_step_train(losses, tt, micro_data, last_batch)
+
+        if self.configs.train.use_fp16:
+            scaler.step(self.optimizer)
+            scaler.update()
+        else:
+            self.optimizer.step()
+
+        self.update_ema_model()
+
+    def adjust_lr(self, current_iters=None):
+        current_iters = self.current_iters if current_iters is None else current_iters
+        base_lr = self.configs.train.lr
+        linear_steps = self.configs.train.milestones[0]
+        if current_iters <= linear_steps:
+            for params_group in self.optimizer.param_groups:
+                params_group['lr'] = (current_iters / linear_steps) * base_lr
+
+    def log_step_train(self, loss, tt, batch, flag=False, phase='train'):
+        '''
+        param loss: a dict recording the loss informations
+        param tt: 1-D tensor, time steps
+        '''
+        if self.rank == 0:
+            chn = batch['lq'].shape[1]
+            num_timesteps = self.base_diffusion.num_timesteps
+            record_steps = [1, (num_timesteps // 2) + 1, num_timesteps]
+            if self.current_iters % self.configs.train.log_freq[0] == 1:
+                self.loss_mean = {key:torch.zeros(size=(len(record_steps),), dtype=torch.float64)
+                                  for key in loss.keys()}
+                self.loss_count = torch.zeros(size=(len(record_steps),), dtype=torch.float64)
+            for jj in range(len(record_steps)):
+                for key, value in loss.items():
+                    index = record_steps[jj] - 1
+                    mask = torch.where(tt == index, torch.ones_like(tt), torch.zeros_like(tt))
+                    current_loss = torch.sum(value.detach() * mask)
+                    self.loss_mean[key][jj] += current_loss.item()
+                self.loss_count[jj] += mask.sum().item()
+
+            if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
+                if torch.any(self.loss_count == 0):
+                    self.loss_count += 1e-4
+                for key in loss.keys():
+                    self.loss_mean[key] /= self.loss_count
+                log_str = 'Train: {:06d}/{:06d}, Loss: '.format(
+                        self.current_iters,
+                        self.configs.train.iterations)
+                for jj, current_record in enumerate(record_steps):
+                    if 'vb' in self.loss_mean:
+                        log_str += 't({:d}):{:.4e}/{:.4e}/{:.4e}/{:.4e}/{:.4e}, '.format(
+                                current_record,
+                                self.loss_mean['total_loss'][jj].item(),
+                                self.loss_mean['mse'][jj].item(),
+                                self.loss_mean['vb'][jj].item(),
+                                self.loss_mean['prior_loss'][jj].item(),
+                                self.loss_mean['mask_loss'][jj].item()
+                                )
+                    else:
+                        log_str += 't({:d}):{:.4e}/{:.4e}/{:.4e}, '.format(
+                                current_record,
+                                self.loss_mean['loss'][jj].item(),
+                                self.loss_mean['prior_loss'][jj].item(),
+                                self.loss_mean['mask_loss'][jj].item()
+                                )
+                log_str += 'lr:{:.2e}'.format(self.optimizer.param_groups[0]['lr'])
+                self.logger.info(log_str)
+            if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
+                self.logging_image(batch['gt'], tag='image', phase=phase, add_global_step=True)
+
+            if self.current_iters % self.configs.train.save_freq == 1 and flag:
+                self.tic = time.time()
+            if self.current_iters % self.configs.train.save_freq == 0 and flag:
+                self.toc = time.time()
+                elaplsed = (self.toc - self.tic) * num_timesteps  / (num_timesteps - 1)
+                self.logger.info(f"Elapsed time: {elaplsed:.2f}s")
+                self.logger.info("="*130)
+
+    def validation(self, phase='val'):
+        self.reload_ema_model(self.ema_rates[0])
+        self.ema_model.eval()
+
+        indices = [int(self.base_diffusion.num_timesteps * x) for x in [0.25, 0.5, 0.75, 1]]
+        chn = 3
+        batch_size = self.configs.train.batch[1]
+        shape = (batch_size, chn,) + (self.configs.data.train.params.out_size,) * 2
+        num_iters = 0
+        total_iters = math.ceil(len(self.datasets[phase])/ self.configs.train.batch[1])
+        for ii, data in enumerate(self.dataloaders[phase]):
+            yt = self.base_diffusion.q_sample( 
+                x_start=util_image.normalize_th(data['lq'], mean=0.5, std=0.5, reverse=False),
+                t=torch.tensor([self.base_diffusion.num_timesteps,]*data['lq'].shape[0], device=f"cuda:{self.rank}")
+            )
+            diffusion_progress = self.base_diffusion.p_sample_loop_progressive(
+                model = self.ema_model,
+                shape = yt.shape,
+                noise = yt,
+                device=f"cuda:{self.rank}",
+                clip_denoised = True,
+                denoised_fn=None,
+                progress = False,
+                model_kwargs={
+                    'mask': data['mask'],
+                    'prior': data['prior']
+                }
+            )
+            psnr_mean = 0
+            lpips_mean = 0
+            ssim_mean = 0
+            for sample in diffusion_progress:
+                num_iters += 1
+                img = util_image.normalize_th(sample['sample'], reverse=True)
+                prior = util_image.normalize_th(sample['prior'], reverse=True)
+                mask = util_image.normalize_th(sample['mask'], reverse=True)
+                if num_iters == 1:
+                    im_recover = img
+                    prior_recover = prior
+                    mask_recover = mask
+                elif num_iters in indices:
+                    im_recover_last = img
+                    im_recover = torch.cat((im_recover, im_recover_last), dim=1)
+                    prior_recover_last = prior
+                    prior_recover = torch.cat((prior_recover, prior_recover_last), dim=1)
+                    mask_recover_last = mask
+                    mask_recover = torch.cat((mask_recover, mask_recover_last), dim=1)
+                im_recover = rearrange(im_recover, 'b (k c) h w -> (b k) c h w', c=chn)
+                mask_recover = rearrange(mask_recover, 'b (k c) h w -> (b k) c h w', c=1)
+                prior_recover = rearrange(prior_recover, 'b (k c) h w -> (b k) c h w', c=data['prior'].shape[1])
+            mask_recover_last = torch.where(mask_recover_last>0.5,1,0)
+            mask_reshape = mask_recover_last.expand(batch_size,3, -1, -1)
+            hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*im_recover_last 
+            lpips = self.lpips_loss((hq_pred-0.5)*2, (data['gt']-0.5)*2).sum().item()
+            psnr = util_image.batch_PSNR(hq_pred, data['gt'], ycbcr=True)
+            ssim = util_image.batch_SSIM(hq_pred, data['gt'], ycbcr=True)
+            psnr_mean += psnr
+            lpips_mean += lpips
+            ssim_mean += ssim
+            if (ii+1) % self.configs.train.log_freq[2] == 0:
+                log_str = '{:s}:{:03d}/{:03d}, PSNR={:6.3f}, SSIM={:6.3f}, LPIPS={:7.5f}'.format(
+                        phase,
+                        ii+1,
+                        total_iters,
+                        psnr / hq_pred.shape[0],
+                        lpips / hq_pred.shape[0]
+                        )
+                self.logger.info(log_str)
+                self.logging_image(data['gt'], tag="hq", phase=phase, add_global_step=False)
+                self.logging_image(
+                    im_recover,
+                    tag='progress',
+                    phase=phase,
+                    add_global_step=True,
+                    nrow=len(indices),
+                    )
+                        
+                self.logging_image(
+                    mask_recover,
+                    tag='mask progress',
+                    phase=phase,
+                    add_global_step=True,
+                    nrow=len(indices),
+                    )
+
+                self.logging_image(
+                    prior_recover,
+                    tag='prior progress',
+                    phase=phase,
+                    add_global_step=True,
+                    nrow=len(indices),
+                    )
+        psnr_mean /= len(self.datasets[phase])
+        lpips_mean /= len(self.datasets[phase])
+        ssim_mean /= len(self.datasets[phase])
+        self.logging_metric(
+                {"PSRN": psnr_mean, "lpips": lpips_mean, 'SSIM': ssim_mean},
+                tag='Metrics',
+                phase=phase,
+                add_global_step=True,
+                )
+        # logging
+        self.logger.info(f'PSNR={psnr_mean:6.3f}, SSIM={ssim_mean:6.3f}, LPIPS={lpips_mean:7.5f}')
+        self.logger.info("="*60)
+
 def my_worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
@@ -797,6 +1073,43 @@ class TrainerPredictedMask(TrainerSR):
             raise ValueError(f"Phase must be 'train' or 'val', now phase={phase}")
 
         return pred
+    
+    def log_step_train(self, hq_pred, loss, batch, flag=False, phase='train'):
+        '''
+        param loss: loss value
+        '''
+        if self.rank == 0:
+            chn = batch['lq'].shape[1]
+            if self.current_iters % self.configs.train.log_freq[0] == 1:
+                self.loss_mean = 0
+
+            self.loss_mean += loss.item()
+
+            if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
+                self.loss_mean /= self.configs.train.log_freq[0]
+                self.L2_gradient = self.calculate_L2_gradient()
+                log_str = 'Train:{:06d}/{:06d}, Loss:{:.2e}, lr:{:.2e}, gradient{:4e}'.format(
+                        self.current_iters,
+                        self.configs.train.iterations,
+                        self.loss_mean,
+                        self.optimizer.param_groups[0]['lr'],
+                        self.L2_gradient
+                        )
+                self.logger.info(log_str)
+                self.logging_metric(self.loss_mean, 'Loss', phase, add_global_step=True)
+            if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
+                self.logging_image(batch['lq'], tag="lq", phase=phase, add_global_step=False)
+                self.logging_image(batch['gt'], tag="hq", phase=phase, add_global_step=False)
+                self.logging_image(batch['mask'], tag="mask", phase=phase, add_global_step=False)
+                self.logging_image(hq_pred.detach(), tag="pred", phase=phase, add_global_step=True)
+
+            if self.current_iters % self.configs.train.save_freq == 1 and flag:
+                self.tic = time.time()
+            if self.current_iters % self.configs.train.save_freq == 0 and flag:
+                self.toc = time.time()
+                elaplsed = (self.toc - self.tic)
+                self.logger.info(f"Elapsed time: {elaplsed:.2f}s")
+                self.logger.info("="*60)
     def validation(self, phase='val'):
         if hasattr(self.configs.train, 'ema_rate'):
             self.reload_ema_model()
@@ -847,6 +1160,21 @@ class TrainerPredictedPrior(TrainerSR):
             per_pixel_loss = F.mse_loss(pred, target, reduction='none')
             pixel_weights = mask * weight_missing + (1 - mask) * weight_known
             loss = (pixel_weights * per_pixel_loss).sum() / pixel_weights.sum()
+        elif self.configs.train.loss_type == "BCE":
+            mask, target = data['mask'], data['prior']
+            per_pixel_loss = F.binary_cross_entropy_with_logits(pred,target,reduction='none')
+            pixel_weights = mask * weight_missing + (1 - mask) * weight_known
+            loss = (pixel_weights * per_pixel_loss).sum() / pixel_weights.sum()
+        elif self.configs.train.loss_type == "WCE":
+            mask, target = data['mask'], data['prior']
+            
+            num_negative = torch.sum(data['prior']==0).float()
+            num_positive = torch.sum(data['prior']==1).float()
+
+            weight = copy.deepcopy(mask)
+            weight[mask == 1] = 1.0 * num_negative / (num_negative+num_positive)
+            weight[mask == 0] = weight_missing * num_positive / (num_negative+num_positive)
+            loss = F.binary_cross_entropy_with_logits(pred,target,weight=weight)
         else:
             raise ValueError(f"Not supported loss type: {self.configs.train.loss_type}")
 
@@ -892,7 +1220,6 @@ class TrainerPredictedPrior(TrainerSR):
         self.optimizer.step()
         if hasattr(self.configs.train, 'ema_rate'):
             self.update_ema_model()
-
     def log_step_train(self, hq_pred, loss, batch, flag=False, phase='train'):
         '''
         param loss: loss value

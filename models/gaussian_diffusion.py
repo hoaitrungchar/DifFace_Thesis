@@ -283,7 +283,7 @@ class GaussianDiffusion:
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
-        model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+        model_output, mask, prior = model(x, self._scale_timesteps(t), **model_kwargs)
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
             assert model_output.shape == (B, C * 2, *x.shape[2:])
@@ -368,6 +368,8 @@ class GaussianDiffusion:
         return {
             "mean": model_mean,
             "variance": model_variance,
+            'mask': mask,
+            'prior':prior,
             "log_variance": model_log_variance,
             "pred_xstart": pred_xstart,
             "pred_noise": pred_noise,
@@ -479,7 +481,7 @@ class GaussianDiffusion:
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+        return {"sample": sample, "pred_xstart": out["pred_xstart"], 'mask': out['mask'], 'prior': out['prior']}
 
     def p_sample_loop(
         self,
@@ -600,8 +602,16 @@ class GaussianDiffusion:
                 regularizer=regularizer,
                 cond_kwargs=cond_kwargs,
             )
-            yield out
             img = out["sample"]
+            mask = out['mask']
+            mask=  th.sigmoid(mask)
+            out['mask'] = mask
+            prior = out['prior']
+            prior =th.sigmoid(prior)
+            out['prior'] = prior
+            model_kwargs={'mask': mask, 'prior': prior}
+            
+            yield out
 
     def _vb_terms_bpd(
         self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None
@@ -636,7 +646,7 @@ class GaussianDiffusion:
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
         output = th.where((t == 0), decoder_nll, kl)
-        return {"output": output, "pred_xstart": out["pred_xstart"]}
+        return {"output": output, "pred_xstart": out["pred_xstart"], 'mask': out['mask'],'prior': out['prior']}
 
     def training_losses(self, model, x_start, t, model_kwargs=None, noise=None):
         """
@@ -660,18 +670,21 @@ class GaussianDiffusion:
         terms = {}
 
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
-            terms["loss"] = self._vb_terms_bpd(
+            output = self._vb_terms_bpd(
                 model=model,
                 x_start=x_start,
                 x_t=x_t,
                 t=t,
                 clip_denoised=False,
                 model_kwargs=model_kwargs,
-            )["output"]
+            )
+            terms['loss'] = output['output']
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
+            terms["mask"] = output['mask']
+            terms["prior"] = output['prior']
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            model_output, mask, prior = model(x_t, self._scale_timesteps(t), **model_kwargs)
 
             if self.model_var_type in [ ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE, ]:
                 B, C = x_t.shape[:2]
@@ -700,6 +713,9 @@ class GaussianDiffusion:
                 ModelMeanType.EPSILON: noise,
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape
+            terms['mask'] = mask
+            terms['prior'] = prior
+            terms['output'] = model_output
             terms["mse"] = mean_flat((target - model_output) ** 2)
             if "vb" in terms:
                 terms["loss"] = terms["mse"] + terms["vb"]
@@ -707,7 +723,7 @@ class GaussianDiffusion:
                 terms["loss"] = terms["mse"]
         else:
             raise NotImplementedError(self.loss_type)
-
+        
         return terms
 
     def _prior_bpd(self, x_start):

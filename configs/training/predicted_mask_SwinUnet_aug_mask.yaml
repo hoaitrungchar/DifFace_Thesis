@@ -2,10 +2,24 @@ trainer:
   target: trainer.TrainerPredictedMask
 
 model:
-  target: models.SimpleUnet.SimpleUnet
+  target: models.SwinUnet.SwinUnet
   params:
-    in_channels: 3
-    out_channels: 1
+    config: 1
+    patch_size: 4
+    num_classes: 1        
+    embed_dim: 96      
+    depths: [2,2,2,2]        
+    depths_decoder: [1, 2, 2, 2]
+    num_heads: [3, 6, 12, 24]
+    window_size: 4
+    qkv_bias: True
+    in_chans: 3
+    qk_scale: null
+    drop_rate: 0.
+    drop_path_rate: 0.1
+    ape: False
+    patch_norm: True
+    use_checkpoint: False
 
 data:
   train:
@@ -47,6 +61,10 @@ data:
           right_padding_prob: 0.5
           bottom_padding_prob: 0.5
         ca_proba: 1
+        half_proba: 1
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: /data/FFHQ/irregular_mask/train
   val:
     type: blindinpainting 
     params:
@@ -86,17 +104,20 @@ data:
           right_padding_prob: 0.5
           bottom_padding_prob: 0.5
         ca_proba: 1
-
+        half_proba: 1
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: /data/FFHQ/irregular_mask/test
     
 
 train:
-  lr: 1e-4
+  lr: 5e-4
   lr_min: 5e-6
   batch: [128, 128]   # batchsize for training and validation
-  microbatch: 16
-  num_workers: 8
+  microbatch: 128
+  num_workers: 16
   prefetch_factor: 2
-  iterations: 500000
+  iterations: 600000
   weight_decay: 0
   save_freq: 10000
   val_freq: ${train.save_freq}

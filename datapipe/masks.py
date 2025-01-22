@@ -12,6 +12,12 @@ import numpy as np
 import os
 from utils import util_image
 from utils import util_common
+from PIL import Image, ImageDraw
+from typing import Tuple, List, Union
+
+import torch
+from torch.utils.data import Dataset
+import torchvision.transforms as T
 
 # from saicinpainting.evaluation.masks.mask import SegmentationMask
 # from saicinpainting.utils import LinearRamp
@@ -275,7 +281,7 @@ class ExpandMaskGenerator:
         return mask
 
 class HalfMaskGenerator:
-    def __init__(self, masking_percent:float=0.25):
+    def __init__(self, masking_percent:float=0.5):
         self.masking_percent = masking_percent
 
         assert self.masking_percent <= 0.95
@@ -354,12 +360,12 @@ class IrregularNvidiaMask:
         self.list_mask_path = self.generate_list_image()
     
     def generate_list_image(self):
-        list_folder_path=list(map(lambda x: os.path.join(self.folder_mask_path,x),os.listdir(self.folder_mask_path)))
-        list_image_path=[]
-        for folder in list_folder_path:
-            if not os.path.isdir(folder):
-                continue
-            list_image_path+=list(map(lambda x: os.path.join(folder,x),os.listdir(folder)))
+        list_image_path=list(map(lambda x: os.path.join(self.folder_mask_path,x),os.listdir(self.folder_mask_path)))
+        # list_image_path=[]
+        # for folder in list_folder_path:
+        #     if not os.path.isdir(folder):
+        #         continue
+        #     list_image_path+=list(map(lambda x: os.path.join(folder,x),os.listdir(folder)))
         return list_image_path
     def __call__(self, img, iter_i=None, raw_image=None):
         """
@@ -367,18 +373,22 @@ class IrregularNvidiaMask:
         """
         h, w = img.shape[1:]
         index = random.randint(0,len(self.list_mask_path)-1)
+        path  = self.list_mask_path[index]
         mask = util_image.imread(self.list_mask_path[index],chn='gray',dtype='float32')
-        mask=cv2.bitwise_not(mask)
+        # mask=cv2.bitwise_not(mask)
         mask = cv2.resize(mask, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
-        mask=mask/255
         mask= np.where(mask<0.5, 0, 1)
         mask = mask.reshape(1,h,w)
         mask=mask.astype(np.float32)
         return mask
-
+        # mask = Image.open(path)
+        # mask = T.Resize((h,w))(mask)
+        # mask = T.ToTensor()(mask)
+        # mask = torch.where(mask < 0.5, 0., 1.).float()
+        # return mask
 class MixedMaskGenerator:
-    def __init__(self, irregular_proba=1/3, irregular_kwargs=None,
-                 box_proba=1/3, box_kwargs=None,
+    def __init__(self, irregular_proba=0, irregular_kwargs=None,
+                 box_proba=0, box_kwargs=None,
                  squares_proba=0, squares_kwargs=None,
                  superres_proba=0, superres_kwargs=None,
                  outpainting_proba=0, outpainting_kwargs=None,
@@ -495,3 +505,5 @@ def get_mask_generator(kind, kwargs):
         # masks = self.impl.get_masks(np.transpose(img, (1, 2, 0)))
         # masks = [m for m in masks if len(np.unique(m)) > 1]
         # return np.random.choice(masks)
+if __name__ =="__main__":
+    generator=MixedMaskGenerator()
