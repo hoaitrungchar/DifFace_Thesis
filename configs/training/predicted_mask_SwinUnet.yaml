@@ -23,12 +23,12 @@ model:
 
 data:
   train:
-    type: maskandpriorinpainting 
+    type: MaskTraining 
     params:
       dataset_type: train
-      dir_path: /data/FFHQ/Dataset/FFHQ/train
-      noise_path1: /data/FFHQ/Dataset/CelebA-HQ/train
-      noise_path2: /data/FFHQ/Dataset/ImageNet/train
+      dir_path: [/data/FFHQ/Dataset/FFHQ/train]
+      noise_path1: [/data/FFHQ/Dataset/CelebA-HQ/train]
+      noise_path2: [/data/FFHQ/Dataset/ImageNet/train]
       transform_type: default
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -44,18 +44,18 @@ data:
       recursive: False
       kernel_gaussian_size: 3
       img_size: 256
-      folder_mask_path: /data/FFHQ/Dataset/Mask/train
+      folder_mask_path: [/data/FFHQ/Dataset/Mask/train]
       mask_kwargs:
         nvidia_mask_proba: 1
         nvidia_mask_kwargs:
-          folder_mask_path: /data/FFHQ/Dataset/Mask/val
+          folder_mask_path: [/data/FFHQ/Dataset/Mask/train]
   val:
-    type: maskandpriorinpainting 
+    type: MaskTraining 
     params:
       dataset_type: val
-      dir_path: /data/FFHQ/Dataset/FFHQ/val
-      noise_path1: /data/FFHQ/Dataset/CelebA-HQ/val
-      noise_path2: /data/FFHQ/Dataset/ImageNet/val
+      dir_path: [/data/FFHQ/Dataset/FFHQ/val]
+      noise_path1: [/data/FFHQ/Dataset/CelebA-HQ/val]
+      noise_path2: [/data/FFHQ/Dataset/ImageNet/val]
       transform_type: default
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -64,18 +64,18 @@ data:
       transform_noise_kwargs:
         mean: [0.0, 0.0, 0.0]
         std: [1.0, 1.0, 1.0]
-        img_resize: [256,256]
+        img_resize: 256
         crop_size: 256
       need_path: False
       im_exts: [png, jpg, JPEG]
       recursive: False
       kernel_gaussian_size: 3
       img_size: 256
-      folder_mask_path: /data/FFHQ/Dataset/Mask/val
+      folder_mask_path: [/data/FFHQ/Dataset/Mask/val]
       mask_kwargs:
         nvidia_mask_proba: 1
         nvidia_mask_kwargs:
-          folder_mask_path: /data/FFHQ/Dataset/Mask/val
+          folder_mask_path: [/data/FFHQ/Dataset/Mask/val]
     
 
 train:
@@ -87,7 +87,7 @@ train:
   prefetch_factor: 2
   iterations: 600000
   weight_decay: 0
-  save_freq: 10000
+  save_freq: 10
   val_freq: ${train.save_freq}
   log_freq: [2, 2, 3]
   ema_rate: 0.999
@@ -95,3 +95,6 @@ train:
   tf_logging: True
   local_logging: True
 
+project_name: Thesis_blind_image_inpainting
+group_name: FFHQ_mask
+name: test

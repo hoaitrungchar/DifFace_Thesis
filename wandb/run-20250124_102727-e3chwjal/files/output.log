@@ -1,0 +1,358 @@
+trainer:
+  target: trainer.TrainerPredictedPrior
+model:
+  target: models.SwinUnet.SwinUnet
+  params:
+    config: 1
+    patch_size: 4
+    num_classes: 1
+    embed_dim: 96
+    depths:
+    - 2
+    - 2
+    - 2
+    - 2
+    depths_decoder:
+    - 1
+    - 2
+    - 2
+    - 2
+    num_heads:
+    - 3
+    - 6
+    - 12
+    - 24
+    window_size: 4
+    qkv_bias: true
+    in_chans: 3
+    qk_scale: null
+    drop_rate: 0.0
+    drop_path_rate: 0.1
+    ape: false
+    patch_norm: true
+    use_checkpoint: false
+data:
+  train:
+    type: PriorTraining
+    params:
+      dataset_type: train
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/train
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/train
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/train
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/train
+      type_prior: edgeCanny
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/train
+  val:
+    type: PriorTraining
+    params:
+      dataset_type: val
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/val
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/val
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/val
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/val
+      type_prior: edgeCanny
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/val
+train:
+  lr: 0.001
+  lr_min: 1.0e-06
+  batch:
+  - 32
+  - 32
+  microbatch: 32
+  num_workers: 8
+  prefetch_factor: 2
+  iterations: 600000
+  weight_decay: 0
+  save_freq: 10
+  val_freq: ${train.save_freq}
+  log_freq:
+  - 2
+  - 2
+  - 3
+  ema_rate: 0.999
+  loss_type: WCE
+  tf_logging: true
+  local_logging: true
+project_name: Thesis_blind_image_inpainting
+group_name: test
+name: test
+save_dir: /data/FFHQ/edge_log
+resume: ''
+cfg_path: /data/FFHQ/DifFace_Thesis/configs/training/predicted_edge_SwinUnet.yaml
+seed: 10000
+
+trainer:
+  target: trainer.TrainerPredictedPrior
+model:
+  target: models.SwinUnet.SwinUnet
+  params:
+    config: 1
+    patch_size: 4
+    num_classes: 1
+    embed_dim: 96
+    depths:
+    - 2
+    - 2
+    - 2
+    - 2
+    depths_decoder:
+    - 1
+    - 2
+    - 2
+    - 2
+    num_heads:
+    - 3
+    - 6
+    - 12
+    - 24
+    window_size: 4
+    qkv_bias: true
+    in_chans: 3
+    qk_scale: null
+    drop_rate: 0.0
+    drop_path_rate: 0.1
+    ape: false
+    patch_norm: true
+    use_checkpoint: false
+data:
+  train:
+    type: PriorTraining
+    params:
+      dataset_type: train
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/train
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/train
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/train
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/train
+      type_prior: edgeCanny
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/train
+  val:
+    type: PriorTraining
+    params:
+      dataset_type: val
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/val
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/val
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/val
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/val
+      type_prior: edgeCanny
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/val
+train:
+  lr: 0.001
+  lr_min: 1.0e-06
+  batch:
+  - 32
+  - 32
+  microbatch: 32
+  num_workers: 8
+  prefetch_factor: 2
+  iterations: 600000
+  weight_decay: 0
+  save_freq: 10
+  val_freq: ${train.save_freq}
+  log_freq:
+  - 2
+  - 2
+  - 3
+  ema_rate: 0.999
+  loss_type: WCE
+  tf_logging: true
+  local_logging: true
+project_name: Thesis_blind_image_inpainting
+group_name: test
+name: test
+save_dir: /data/FFHQ/edge_log
+resume: ''
+cfg_path: /data/FFHQ/DifFace_Thesis/configs/training/predicted_edge_SwinUnet.yaml
+seed: 10000
+/home/mmhk20/.local/lib/python3.8/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+
+SwinTransformerSys expand initial----depths:[2, 2, 2, 2];depths_decoder:[1, 2, 2, 2];drop_path_rate:0.1;num_classes:1
+/usr/local/anaconda3/lib/python3.8/site-packages/torch/functional.py:512: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3587.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+---final upsample expand_first---
+Number of parameters: 27.15M
+len_file_path_all 54999
+Traceback (most recent call last):
+  File "main.py", line 32, in <module>
+    trainer.train()
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 308, in train
+    self.build_dataloader() # prepare data: self.dataloaders, self.datasets, self.sampler
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 254, in build_dataloader
+    datasets[current_phase] = create_dataset(dataset_config)
+  File "/data/FFHQ/DifFace_Thesis/datapipe/datasets.py", line 95, in create_dataset
+    dataset = MaskTrainingDataset(**dataset_config['params'])
+  File "/data/FFHQ/DifFace_Thesis/datapipe/datasets.py", line 302, in __init__
+    self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+  File "/data/FFHQ/DifFace_Thesis/utils/util_common.py", line 85, in scan_files_from_folder
+    file_paths.extend(sorted([str(x) for x in Path(current_dir).glob(search_flag)]))
+  File "/data/FFHQ/DifFace_Thesis/utils/util_common.py", line 85, in <listcomp>
+    file_paths.extend(sorted([str(x) for x in Path(current_dir).glob(search_flag)]))
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "main.py", line 32, in <module>
+    trainer.train()
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 308, in train
+    self.build_dataloader() # prepare data: self.dataloaders, self.datasets, self.sampler
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 254, in build_dataloader
+    datasets[current_phase] = create_dataset(dataset_config)
+  File "/data/FFHQ/DifFace_Thesis/datapipe/datasets.py", line 95, in create_dataset
+    dataset = MaskTrainingDataset(**dataset_config['params'])
+  File "/data/FFHQ/DifFace_Thesis/datapipe/datasets.py", line 302, in __init__
+    self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+  File "/data/FFHQ/DifFace_Thesis/utils/util_common.py", line 85, in scan_files_from_folder
+    file_paths.extend(sorted([str(x) for x in Path(current_dir).glob(search_flag)]))
+  File "/data/FFHQ/DifFace_Thesis/utils/util_common.py", line 85, in <listcomp>
+    file_paths.extend(sorted([str(x) for x in Path(current_dir).glob(search_flag)]))
+KeyboardInterrupt

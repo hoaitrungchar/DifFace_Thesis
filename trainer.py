@@ -18,6 +18,7 @@ from copy import deepcopy
 from omegaconf import OmegaConf
 from collections import OrderedDict
 from einops import rearrange
+import wandb
 
 
 
@@ -45,7 +46,8 @@ from models.resample import UniformSampler
 class TrainerBase:
     def __init__(self, configs):
         self.configs = configs
-
+        wandb.login(key=os.getenv("WANDB_API_KEY"))
+        wandb.init(project=configs.project_name, group= configs.group_name, name=configs.name)
         # setup distributed training: self.num_gpus, self.rank
         self.setup_dist()
 
@@ -344,13 +346,16 @@ class TrainerBase:
     def save_ckpt(self):
         if self.rank == 0:
             ckpt_path = self.ckpt_dir / 'model_{:d}.pth'.format(self.current_iters)
+        
             torch.save({'iters_start': self.current_iters,
                         'log_step': {phase:self.log_step[phase] for phase in ['train', 'val']},
                         'log_step_img': {phase:self.log_step_img[phase] for phase in ['train', 'val']},
                         'state_dict': self.model.state_dict()}, ckpt_path)
+            wandb.save(ckpt_path,base_path=self.ckpt_dir)
             if hasattr(self, 'ema_rate'):
                 ema_ckpt_path = self.ema_ckpt_dir / 'ema_model_{:d}.pth'.format(self.current_iters)
                 torch.save(self.ema_state, ema_ckpt_path)
+                wandb.save(ema_ckpt_path,base_path= self.ema_ckpt_dir)
 
     def logging_image(self, im_tensor, tag, phase, add_global_step=False, nrow=8):
         """
@@ -438,9 +443,9 @@ class TrainerSR(TrainerBase):
         super().build_model()
 
         # LPIPS metric
-        lpips_loss = lpips.LPIPS(net='alex').cuda()
-        self.freeze_model(lpips_loss)
-        self.lpips_loss = lpips_loss.eval()
+        # lpips_loss = lpips.LPIPS(net='alex').cuda()
+        # self.freeze_model(lpips_loss)
+        # self.lpips_loss = lpips_loss.eval()
 
     def feed_data(self, data, phase='train'):
         if phase == 'train':
@@ -1082,13 +1087,14 @@ class TrainerPredictedMask(TrainerSR):
             chn = batch['lq'].shape[1]
             if self.current_iters % self.configs.train.log_freq[0] == 1:
                 self.loss_mean = 0
+                self.L2_gradient = 0 
 
             self.loss_mean += loss.item()
-
+            self.L2_gradient += self.calculate_L2_gradient()
             if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
                 self.loss_mean /= self.configs.train.log_freq[0]
-                self.L2_gradient = self.calculate_L2_gradient()
-                log_str = 'Train:{:06d}/{:06d}, Loss:{:.2e}, lr:{:.2e}, gradient{:4e}'.format(
+                self.L2_gradient  /= self.configs.train.log_freq[0]
+                log_str = 'Train:{:06d}/{:06d}, Loss:{:.2e}, lr:{:.2e}, gradient:{:4e}'.format(
                         self.current_iters,
                         self.configs.train.iterations,
                         self.loss_mean,
@@ -1096,10 +1102,10 @@ class TrainerPredictedMask(TrainerSR):
                         self.L2_gradient
                         )
                 self.logger.info(log_str)
+                wandb.log({"train/loss": self.loss_mean, 'train/learning_rate': self.optimizer.param_groups[0]['lr'], 'train/gradient': self.L2_gradient })
                 self.logging_metric(self.loss_mean, 'Loss', phase, add_global_step=True)
             if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
                 self.logging_image(batch['lq'], tag="lq", phase=phase, add_global_step=False)
-                self.logging_image(batch['gt'], tag="hq", phase=phase, add_global_step=False)
                 self.logging_image(batch['mask'], tag="mask", phase=phase, add_global_step=False)
                 self.logging_image(hq_pred.detach(), tag="pred", phase=phase, add_global_step=True)
 
@@ -1119,24 +1125,28 @@ class TrainerPredictedMask(TrainerSR):
 
         total_iters = math.ceil(len(self.datasets[phase]) / self.configs.train.batch[1])
         loss_mean=0
+        loss_avg=0
+        print(total_iters, len(self.dataloaders[phase]) )
         for ii, data in enumerate(self.dataloaders[phase]):
             data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
             loss = self.get_loss(hq_pred, data)
-            loss_mean += loss
+            loss_mean += loss.item()
+            loss_avg += loss.item()
 
             if (ii+1) % self.configs.train.log_freq[2] == 0:
+                loss_avg/=self.configs.train.log_freq[2]
                 log_str = '{:s}:{:03d}/{:03d}, loss={:5.8f}'.format(
                         phase,
                         ii+1,
                         total_iters,
-                        loss
+                        loss_avg
                         )
                 self.logger.info(log_str)
                 self.logging_image(data['lq'], tag="lq", phase=phase, add_global_step=False)
-                self.logging_image(data['gt'], tag="hq", phase=phase, add_global_step=False)
                 self.logging_image(data['mask'], tag="mask", phase=phase, add_global_step=False)
                 self.logging_image(hq_pred.detach(), tag="pred", phase=phase, add_global_step=True)
+                loss_avg=0
         loss_mean /= total_iters
         self.logging_metric(
                 {"loss": loss_mean},
@@ -1144,6 +1154,7 @@ class TrainerPredictedMask(TrainerSR):
                 phase=phase,
                 add_global_step=True,
                 )
+        wandb.log({"val/loss": loss_mean})
         self.logger.info(f'loss={loss_mean:5.8f}')
         if not hasattr(self.configs.train, 'ema_rate'):
             self.model.train()
@@ -1200,7 +1211,7 @@ class TrainerPredictedPrior(TrainerSR):
         current_batchsize = data['lq'].shape[0]
         micro_batchsize = self.configs.train.microbatch
         num_grad_accumulate = math.ceil(current_batchsize / micro_batchsize)
-
+        
         self.optimizer.zero_grad()
         for jj in range(0, current_batchsize, micro_batchsize):
             micro_data = {key:value[jj:jj+micro_batchsize,] for key, value in data.items()}
@@ -1209,7 +1220,7 @@ class TrainerPredictedPrior(TrainerSR):
             if last_batch or self.num_gpus <= 1:
                 loss = self.get_loss(hq_pred, micro_data)
             else:
-                with self.model.no_sync():
+                with self.mcodel.no_sync():
                     loss = self.get_loss(hq_pred, micro_data)
             loss /= num_grad_accumulate
             loss.backward()
@@ -1228,22 +1239,25 @@ class TrainerPredictedPrior(TrainerSR):
             chn = batch['lq'].shape[1]
             if self.current_iters % self.configs.train.log_freq[0] == 1:
                 self.loss_mean = 0
+                self.L2_gradient = 0 
 
             self.loss_mean += loss.item()
-
+            self.L2_gradient += self.calculate_L2_gradient()
             if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
                 self.loss_mean /= self.configs.train.log_freq[0]
-                log_str = 'Train:{:06d}/{:06d}, Loss:{:.2e}, lr:{:.2e}'.format(
+                self.L2_gradient  /= self.configs.train.log_freq[0]
+                log_str = 'Train:{:06d}/{:06d}, Loss:{:.2e}, lr:{:.2e}, gradient:{:4e}'.format(
                         self.current_iters,
                         self.configs.train.iterations,
                         self.loss_mean,
-                        self.optimizer.param_groups[0]['lr']
+                        self.optimizer.param_groups[0]['lr'],
+                        self.L2_gradient
                         )
                 self.logger.info(log_str)
+                wandb.log({"train/loss": self.loss_mean, 'train/learning_rate': self.optimizer.param_groups[0]['lr'], 'train/gradient': self.L2_gradient })
                 self.logging_metric(self.loss_mean, 'Loss', phase, add_global_step=True)
             if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
                 self.logging_image(batch['lq'], tag="lq", phase=phase, add_global_step=False)
-                self.logging_image(batch['gt'], tag="hq", phase=phase, add_global_step=False)
                 self.logging_image(batch['mask'], tag="mask", phase=phase, add_global_step=False)
                 self.logging_image(batch['prior'], tag="prior", phase=phase, add_global_step=False)
                 self.logging_image(hq_pred.detach(), tag="pred", phase=phase, add_global_step=True)
@@ -1265,25 +1279,28 @@ class TrainerPredictedPrior(TrainerSR):
 
         total_iters = math.ceil(len(self.datasets[phase]) / self.configs.train.batch[1])
         loss_mean=0
+        loss_avg=0
+        print(total_iters, len(self.dataloaders[phase]) )
         for ii, data in enumerate(self.dataloaders[phase]):
             data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
             loss = self.get_loss(hq_pred, data)
-            loss_mean += loss
+            loss_mean += loss.item()
+            loss_avg += loss.item()
 
             if (ii+1) % self.configs.train.log_freq[2] == 0:
+                loss_avg/=self.configs.train.log_freq[2]
                 log_str = '{:s}:{:03d}/{:03d}, loss={:5.8f}'.format(
                         phase,
                         ii+1,
                         total_iters,
-                        loss
+                        loss_avg
                         )
                 self.logger.info(log_str)
                 self.logging_image(data['lq'], tag="lq", phase=phase, add_global_step=False)
-                self.logging_image(data['gt'], tag="hq", phase=phase, add_global_step=False)
-                self.logging_image(data['mask'], tag="mask", phase=phase, add_global_step=False)
                 self.logging_image(data['prior'], tag="prior", phase=phase, add_global_step=False)
                 self.logging_image(hq_pred.detach(), tag="pred", phase=phase, add_global_step=True)
+                loss_avg=0
         loss_mean /= total_iters
         self.logging_metric(
                 {"loss": loss_mean},
@@ -1291,10 +1308,10 @@ class TrainerPredictedPrior(TrainerSR):
                 phase=phase,
                 add_global_step=True,
                 )
+        wandb.log({"val/loss": loss_mean})
         self.logger.info(f'loss={loss_mean:5.8f}')
         if not hasattr(self.configs.train, 'ema_rate'):
             self.model.train()
-
 
 if __name__ == '__main__':
     from utils import util_image

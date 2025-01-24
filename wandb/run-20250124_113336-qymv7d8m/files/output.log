@@ -1,0 +1,956 @@
+trainer:
+  target: trainer.TrainerPredictedMask
+model:
+  target: models.SwinUnet.SwinUnet
+  params:
+    config: 1
+    patch_size: 4
+    num_classes: 1
+    embed_dim: 96
+    depths:
+    - 2
+    - 2
+    - 2
+    - 2
+    depths_decoder:
+    - 1
+    - 2
+    - 2
+    - 2
+    num_heads:
+    - 3
+    - 6
+    - 12
+    - 24
+    window_size: 4
+    qkv_bias: true
+    in_chans: 3
+    qk_scale: null
+    drop_rate: 0.0
+    drop_path_rate: 0.1
+    ape: false
+    patch_norm: true
+    use_checkpoint: false
+data:
+  train:
+    type: MaskTraining
+    params:
+      dataset_type: train
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/train
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/train
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/train
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/train
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/train
+  val:
+    type: MaskTraining
+    params:
+      dataset_type: val
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/val
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/val
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/val
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/val
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/val
+train:
+  lr: 0.001
+  lr_min: 1.0e-06
+  batch:
+  - 16
+  - 16
+  microbatch: 16
+  num_workers: 8
+  prefetch_factor: 2
+  iterations: 600000
+  weight_decay: 0
+  save_freq: 10
+  val_freq: ${train.save_freq}
+  log_freq:
+  - 2
+  - 2
+  - 3
+  ema_rate: 0.999
+  loss_type: BCE
+  tf_logging: true
+  local_logging: true
+project_name: Thesis_blind_image_inpainting
+group_name: FFHQ_mask
+name: test
+save_dir: /data/FFHQ/edge_log
+resume: ''
+cfg_path: /data/FFHQ/DifFace_Thesis/configs/training/predicted_mask_SwinUnet.yaml
+seed: 10000
+
+trainer:
+  target: trainer.TrainerPredictedMask
+model:
+  target: models.SwinUnet.SwinUnet
+  params:
+    config: 1
+    patch_size: 4
+    num_classes: 1
+    embed_dim: 96
+    depths:
+    - 2
+    - 2
+    - 2
+    - 2
+    depths_decoder:
+    - 1
+    - 2
+    - 2
+    - 2
+    num_heads:
+    - 3
+    - 6
+    - 12
+    - 24
+    window_size: 4
+    qkv_bias: true
+    in_chans: 3
+    qk_scale: null
+    drop_rate: 0.0
+    drop_path_rate: 0.1
+    ape: false
+    patch_norm: true
+    use_checkpoint: false
+data:
+  train:
+    type: MaskTraining
+    params:
+      dataset_type: train
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/train
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/train
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/train
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/train
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/train
+  val:
+    type: MaskTraining
+    params:
+      dataset_type: val
+      dir_path:
+      - /data/FFHQ/Dataset/FFHQ/val
+      noise_path1:
+      - /data/FFHQ/Dataset/CelebA-HQ/val
+      noise_path2:
+      - /data/FFHQ/Dataset/ImageNet/val
+      transform_type: default
+      transform_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean:
+        - 0.0
+        - 0.0
+        - 0.0
+        std:
+        - 1.0
+        - 1.0
+        - 1.0
+        img_resize: 256
+        crop_size: 256
+      need_path: false
+      im_exts:
+      - png
+      - jpg
+      - JPEG
+      recursive: false
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path:
+      - /data/FFHQ/Dataset/Mask/val
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path:
+          - /data/FFHQ/Dataset/Mask/val
+train:
+  lr: 0.001
+  lr_min: 1.0e-06
+  batch:
+  - 16
+  - 16
+  microbatch: 16
+  num_workers: 8
+  prefetch_factor: 2
+  iterations: 600000
+  weight_decay: 0
+  save_freq: 10
+  val_freq: ${train.save_freq}
+  log_freq:
+  - 2
+  - 2
+  - 3
+  ema_rate: 0.999
+  loss_type: BCE
+  tf_logging: true
+  local_logging: true
+project_name: Thesis_blind_image_inpainting
+group_name: FFHQ_mask
+name: test
+save_dir: /data/FFHQ/edge_log
+resume: ''
+cfg_path: /data/FFHQ/DifFace_Thesis/configs/training/predicted_mask_SwinUnet.yaml
+seed: 10000
+/home/mmhk20/.local/lib/python3.8/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+
+SwinTransformerSys expand initial----depths:[2, 2, 2, 2];depths_decoder:[1, 2, 2, 2];drop_path_rate:0.1;num_classes:1
+/usr/local/anaconda3/lib/python3.8/site-packages/torch/functional.py:512: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3587.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+---final upsample expand_first---
+Number of parameters: 27.15M
+len_file_path_all 54999
+24183
+1281167
+len_file_paths_noise 1305350
+len_file_path_all 5000
+2993
+50000
+len_file_paths_noise 52993
+Number of images in train data set: 54999
+Number of images in val data set: 5000
+Train:000002/600000, Loss:6.88e-01, lr:1.00e-03, gradient:1.897706e+00
+Train:000004/600000, Loss:6.38e-01, lr:1.00e-03, gradient:1.312110e+00
+Train:000006/600000, Loss:5.78e-01, lr:1.00e-03, gradient:5.303388e-01
+Train:000008/600000, Loss:5.77e-01, lr:1.00e-03, gradient:3.198338e-01
+Train:000010/600000, Loss:5.43e-01, lr:1.00e-03, gradient:3.534693e-01
+Elapsed time: 12.00s
+============================================================
+313 313
+val:003/313, loss=0.73735787
+val:006/313, loss=0.73624543
+val:009/313, loss=0.73672058
+val:012/313, loss=0.73661526
+val:015/313, loss=0.73616389
+val:018/313, loss=0.73742706
+val:021/313, loss=0.73657278
+val:024/313, loss=0.73786700
+val:027/313, loss=0.73611257
+val:030/313, loss=0.73686190
+val:033/313, loss=0.73667125
+val:036/313, loss=0.73684144
+val:039/313, loss=0.73700291
+val:042/313, loss=0.73641406
+val:045/313, loss=0.73709480
+val:048/313, loss=0.73699822
+val:051/313, loss=0.73745879
+val:054/313, loss=0.73641539
+val:057/313, loss=0.73657580
+val:060/313, loss=0.73651751
+val:063/313, loss=0.73693126
+val:066/313, loss=0.73718903
+val:069/313, loss=0.73752656
+val:072/313, loss=0.73587153
+val:075/313, loss=0.73696166
+val:078/313, loss=0.73739640
+val:081/313, loss=0.73614444
+val:084/313, loss=0.73659311
+val:087/313, loss=0.73672225
+val:090/313, loss=0.73788851
+val:093/313, loss=0.73676701
+val:096/313, loss=0.73670077
+val:099/313, loss=0.73746530
+val:102/313, loss=0.73535659
+val:105/313, loss=0.73734746
+val:108/313, loss=0.73720491
+val:111/313, loss=0.73641111
+val:114/313, loss=0.73616219
+val:117/313, loss=0.73786139
+val:120/313, loss=0.73677208
+val:123/313, loss=0.73551333
+val:126/313, loss=0.73666040
+val:129/313, loss=0.73717088
+val:132/313, loss=0.73675489
+val:135/313, loss=0.73647857
+val:138/313, loss=0.73677818
+val:141/313, loss=0.73656078
+val:144/313, loss=0.73636981
+val:147/313, loss=0.73747096
+val:150/313, loss=0.73644545
+val:153/313, loss=0.73696780
+val:156/313, loss=0.73657560
+val:159/313, loss=0.73601456
+val:162/313, loss=0.73689369
+val:165/313, loss=0.73656843
+val:168/313, loss=0.73638076
+val:171/313, loss=0.73640349
+val:174/313, loss=0.73729871
+val:177/313, loss=0.73718194
+val:180/313, loss=0.73706782
+val:183/313, loss=0.73616743
+val:186/313, loss=0.73520525
+val:189/313, loss=0.73634738
+val:192/313, loss=0.73790588
+val:195/313, loss=0.73584580
+val:198/313, loss=0.73643510
+val:201/313, loss=0.73640345
+val:204/313, loss=0.73642194
+val:207/313, loss=0.73654495
+val:210/313, loss=0.73675370
+val:213/313, loss=0.73728551
+val:216/313, loss=0.73719066
+val:219/313, loss=0.73678476
+val:222/313, loss=0.73676733
+val:225/313, loss=0.73641686
+val:228/313, loss=0.73709210
+val:231/313, loss=0.73714042
+val:234/313, loss=0.73671061
+val:237/313, loss=0.73669970
+val:240/313, loss=0.73699816
+val:243/313, loss=0.73735942
+val:246/313, loss=0.73727564
+val:249/313, loss=0.73601246
+val:252/313, loss=0.73656344
+val:255/313, loss=0.73652800
+val:258/313, loss=0.73637517
+val:261/313, loss=0.73673898
+val:264/313, loss=0.73719426
+val:267/313, loss=0.73706830
+val:270/313, loss=0.73731830
+val:273/313, loss=0.73660719
+val:276/313, loss=0.73708793
+val:279/313, loss=0.73741559
+val:282/313, loss=0.73658347
+val:285/313, loss=0.73693530
+val:288/313, loss=0.73681696
+val:291/313, loss=0.73672883
+val:294/313, loss=0.73679674
+val:297/313, loss=0.73621778
+val:300/313, loss=0.73673193
+val:303/313, loss=0.73766232
+val:306/313, loss=0.73583001
+val:309/313, loss=0.73580796
+val:312/313, loss=0.73683244
+loss=0.73674931
+Train:000012/600000, Loss:5.24e-01, lr:1.00e-03, gradient:3.479559e-01
+Train:000014/600000, Loss:5.85e-01, lr:1.00e-03, gradient:4.737082e-01
+Train:000016/600000, Loss:5.36e-01, lr:1.00e-03, gradient:6.973373e-01
+Train:000018/600000, Loss:5.80e-01, lr:1.00e-03, gradient:4.215640e-01
+Train:000020/600000, Loss:5.53e-01, lr:1.00e-03, gradient:3.028891e-01
+Elapsed time: 11.86s
+============================================================
+313 313
+val:003/313, loss=0.74344496
+val:006/313, loss=0.74415004
+val:009/313, loss=0.74524621
+val:012/313, loss=0.74598897
+val:015/313, loss=0.74410526
+val:018/313, loss=0.74471978
+val:021/313, loss=0.74564797
+val:024/313, loss=0.74457028
+val:027/313, loss=0.74428346
+val:030/313, loss=0.74300069
+val:033/313, loss=0.74434968
+val:036/313, loss=0.74373863
+val:039/313, loss=0.74448355
+val:042/313, loss=0.74362606
+val:045/313, loss=0.74521707
+val:048/313, loss=0.74467544
+val:051/313, loss=0.74421996
+val:054/313, loss=0.74462454
+val:057/313, loss=0.74466880
+val:060/313, loss=0.74305308
+val:063/313, loss=0.74564103
+val:066/313, loss=0.74484509
+val:069/313, loss=0.74275768
+val:072/313, loss=0.74561181
+val:075/313, loss=0.74371016
+val:078/313, loss=0.74470798
+val:081/313, loss=0.74272809
+val:084/313, loss=0.74462122
+val:087/313, loss=0.74392676
+val:090/313, loss=0.74495926
+val:093/313, loss=0.74265981
+val:096/313, loss=0.74502605
+val:099/313, loss=0.74336912
+val:102/313, loss=0.74377994
+val:105/313, loss=0.74393666
+val:108/313, loss=0.74337959
+val:111/313, loss=0.74295986
+val:114/313, loss=0.74454236
+val:117/313, loss=0.74455738
+val:120/313, loss=0.74452996
+val:123/313, loss=0.74534005
+val:126/313, loss=0.74327115
+val:129/313, loss=0.74500485
+val:132/313, loss=0.74433428
+val:135/313, loss=0.74435023
+val:138/313, loss=0.74631057
+val:141/313, loss=0.74281959
+val:144/313, loss=0.74445520
+val:147/313, loss=0.74330290
+val:150/313, loss=0.74295292
+val:153/313, loss=0.74437533
+val:156/313, loss=0.74369562
+val:159/313, loss=0.74354959
+val:162/313, loss=0.74408450
+val:165/313, loss=0.74256140
+val:168/313, loss=0.74592984
+val:171/313, loss=0.74408108
+val:174/313, loss=0.74412803
+val:177/313, loss=0.74537887
+val:180/313, loss=0.74311586
+val:183/313, loss=0.74404355
+val:186/313, loss=0.74582809
+val:189/313, loss=0.74439985
+val:192/313, loss=0.74505188
+val:195/313, loss=0.74321502
+val:198/313, loss=0.74465219
+val:201/313, loss=0.74475908
+val:204/313, loss=0.74370060
+val:207/313, loss=0.74430323
+val:210/313, loss=0.74312878
+val:213/313, loss=0.74570839
+val:216/313, loss=0.74531154
+val:219/313, loss=0.74536693
+val:222/313, loss=0.74487774
+val:225/313, loss=0.74315614
+val:228/313, loss=0.74532757
+val:231/313, loss=0.74326128
+val:234/313, loss=0.74280226
+val:237/313, loss=0.74433209
+val:240/313, loss=0.74412811
+val:243/313, loss=0.74561544
+val:246/313, loss=0.74457290
+val:249/313, loss=0.74558896
+val:252/313, loss=0.74560223
+val:255/313, loss=0.74212261
+val:258/313, loss=0.74406032
+val:261/313, loss=0.74369027
+val:264/313, loss=0.74540494
+val:267/313, loss=0.74397522
+val:270/313, loss=0.74363180
+val:273/313, loss=0.74386078
+val:276/313, loss=0.74260094
+val:279/313, loss=0.74464355
+val:282/313, loss=0.74343912
+val:285/313, loss=0.74280753
+val:288/313, loss=0.74514927
+val:291/313, loss=0.74402757
+val:294/313, loss=0.74458953
+val:297/313, loss=0.74416006
+val:300/313, loss=0.74283705
+val:303/313, loss=0.74286371
+val:306/313, loss=0.74367750
+val:309/313, loss=0.74207109
+val:312/313, loss=0.74374906
+loss=0.74419196
+Train:000022/600000, Loss:5.51e-01, lr:1.00e-03, gradient:2.363744e-01
+Train:000024/600000, Loss:5.87e-01, lr:1.00e-03, gradient:1.136566e-01
+Train:000026/600000, Loss:5.44e-01, lr:1.00e-03, gradient:3.372680e-01
+Train:000028/600000, Loss:5.09e-01, lr:1.00e-03, gradient:1.024588e-01
+Train:000030/600000, Loss:5.55e-01, lr:1.00e-03, gradient:3.206313e-01
+Elapsed time: 10.94s
+============================================================
+313 313
+val:003/313, loss=0.74994463
+val:006/313, loss=0.74965807
+val:009/313, loss=0.74932224
+val:012/313, loss=0.74849240
+val:015/313, loss=0.75076431
+val:018/313, loss=0.74877187
+val:021/313, loss=0.75255388
+val:024/313, loss=0.75253799
+val:027/313, loss=0.75278163
+val:030/313, loss=0.75073914
+val:033/313, loss=0.75214396
+val:036/313, loss=0.75113908
+val:039/313, loss=0.75290525
+val:042/313, loss=0.74981610
+val:045/313, loss=0.75003697
+val:048/313, loss=0.75131087
+val:051/313, loss=0.75277185
+val:054/313, loss=0.75226820
+val:057/313, loss=0.74942261
+val:060/313, loss=0.75162246
+val:063/313, loss=0.75180598
+val:066/313, loss=0.75218604
+val:069/313, loss=0.75064655
+val:072/313, loss=0.75088926
+val:075/313, loss=0.75092332
+val:078/313, loss=0.75137152
+val:081/313, loss=0.75057532
+val:084/313, loss=0.74955847
+val:087/313, loss=0.74964704
+val:090/313, loss=0.75116765
+val:093/313, loss=0.75052704
+val:096/313, loss=0.75056263
+val:099/313, loss=0.75142274
+val:102/313, loss=0.75304842
+val:105/313, loss=0.74890027
+val:108/313, loss=0.75045252
+val:111/313, loss=0.75143143
+val:114/313, loss=0.74817175
+val:117/313, loss=0.74805472
+val:120/313, loss=0.75142092
+val:123/313, loss=0.75001329
+val:126/313, loss=0.75011277
+val:129/313, loss=0.75115416
+val:132/313, loss=0.75029389
+val:135/313, loss=0.75275181
+val:138/313, loss=0.75155385
+val:141/313, loss=0.75180070
+val:144/313, loss=0.75163831
+val:147/313, loss=0.75238454
+val:150/313, loss=0.75227179
+val:153/313, loss=0.75143621
+val:156/313, loss=0.75044767
+val:159/313, loss=0.75218882
+val:162/313, loss=0.75198418
+val:165/313, loss=0.75401082
+val:168/313, loss=0.75204432
+val:171/313, loss=0.74948011
+val:174/313, loss=0.75092288
+val:177/313, loss=0.75250632
+val:180/313, loss=0.75114063
+val:183/313, loss=0.75019083
+val:186/313, loss=0.75230533
+val:189/313, loss=0.74998281
+val:192/313, loss=0.75261843
+val:195/313, loss=0.75132340
+val:198/313, loss=0.75214575
+val:201/313, loss=0.75020979
+val:204/313, loss=0.75197786
+val:207/313, loss=0.75057218
+val:210/313, loss=0.75209532
+val:213/313, loss=0.75300890
+val:216/313, loss=0.75097652
+val:219/313, loss=0.74978950
+val:222/313, loss=0.75042184
+val:225/313, loss=0.74858658
+val:228/313, loss=0.75208275
+val:231/313, loss=0.75077601
+val:234/313, loss=0.75149498
+val:237/313, loss=0.75200003
+val:240/313, loss=0.75048886
+val:243/313, loss=0.74963280
+val:246/313, loss=0.74964708
+val:249/313, loss=0.74975173
+val:252/313, loss=0.75180795
+val:255/313, loss=0.75061735
+val:258/313, loss=0.75238130
+val:261/313, loss=0.75127733
+val:264/313, loss=0.75153402
+val:267/313, loss=0.74987525
+val:270/313, loss=0.75540109
+val:273/313, loss=0.75112923
+val:276/313, loss=0.75058385
+val:279/313, loss=0.75082958
+val:282/313, loss=0.75134254
+val:285/313, loss=0.75094054
+val:288/313, loss=0.74999738
+val:291/313, loss=0.75257774
+val:294/313, loss=0.75280702
+val:297/313, loss=0.75080673
+val:300/313, loss=0.75155175
+val:303/313, loss=0.75284187
+val:306/313, loss=0.74960053
+val:309/313, loss=0.75340414
+val:312/313, loss=0.75093132
+loss=0.75110902
+Train:000032/600000, Loss:5.50e-01, lr:1.00e-03, gradient:1.631291e-01
+Train:000034/600000, Loss:5.65e-01, lr:1.00e-03, gradient:3.820972e-01
+Train:000036/600000, Loss:5.33e-01, lr:1.00e-03, gradient:3.822676e-01
+Train:000038/600000, Loss:5.09e-01, lr:1.00e-03, gradient:1.053253e-01
+Train:000040/600000, Loss:5.24e-01, lr:1.00e-03, gradient:3.981098e-01
+Elapsed time: 11.16s
+============================================================
+313 313
+val:003/313, loss=0.75753315
+val:006/313, loss=0.76097409
+val:009/313, loss=0.76227113
+val:012/313, loss=0.75718270
+val:015/313, loss=0.75574116
+val:018/313, loss=0.75790173
+val:021/313, loss=0.76059842
+val:024/313, loss=0.75930540
+val:027/313, loss=0.75981565
+val:030/313, loss=0.75656579
+val:033/313, loss=0.75851905
+val:036/313, loss=0.76265981
+val:039/313, loss=0.75344165
+val:042/313, loss=0.76006929
+val:045/313, loss=0.75592164
+val:048/313, loss=0.75955464
+val:051/313, loss=0.75748650
+val:054/313, loss=0.76040781
+val:057/313, loss=0.75962444
+val:060/313, loss=0.75457152
+val:063/313, loss=0.76023316
+val:066/313, loss=0.75729622
+val:069/313, loss=0.75891173
+val:072/313, loss=0.75755940
+val:075/313, loss=0.75782305
+val:078/313, loss=0.75729406
+val:081/313, loss=0.75926477
+val:084/313, loss=0.75721574
+val:087/313, loss=0.75932207
+val:090/313, loss=0.75954920
+val:093/313, loss=0.76125294
+val:096/313, loss=0.75862481
+val:099/313, loss=0.75601621
+val:102/313, loss=0.75990379
+val:105/313, loss=0.75307385
+val:108/313, loss=0.75681506
+val:111/313, loss=0.76070853
+val:114/313, loss=0.76303667
+val:117/313, loss=0.76032537
+val:120/313, loss=0.76097349
+val:123/313, loss=0.75779104
+val:126/313, loss=0.75607417
+val:129/313, loss=0.75780884
+val:132/313, loss=0.75631082
+val:135/313, loss=0.76171126
+val:138/313, loss=0.75713237
+val:141/313, loss=0.75571543
+val:144/313, loss=0.75771976
+val:147/313, loss=0.75788828
+val:150/313, loss=0.75663131
+val:153/313, loss=0.75920212
+val:156/313, loss=0.75988613
+val:159/313, loss=0.75725400
+val:162/313, loss=0.76353848
+val:165/313, loss=0.76149495
+val:168/313, loss=0.75860198
+val:171/313, loss=0.75886005
+val:174/313, loss=0.75777731
+val:177/313, loss=0.75861867
+val:180/313, loss=0.75725444
+val:183/313, loss=0.75967578
+val:186/313, loss=0.75896931
+val:189/313, loss=0.75885206
+val:192/313, loss=0.75814315
+val:195/313, loss=0.75812868
+val:198/313, loss=0.75935328
+val:201/313, loss=0.76064175
+val:204/313, loss=0.75919233
+val:207/313, loss=0.75948987
+val:210/313, loss=0.75726157
+val:213/313, loss=0.75963718
+val:216/313, loss=0.75818187
+val:219/313, loss=0.75819935
+val:222/313, loss=0.75919455
+val:225/313, loss=0.75708461
+val:228/313, loss=0.76236294
+val:231/313, loss=0.75677687
+val:234/313, loss=0.75780084
+val:237/313, loss=0.76082373
+val:240/313, loss=0.76112463
+val:243/313, loss=0.75646253
+val:246/313, loss=0.75976084
+val:249/313, loss=0.76063341
+val:252/313, loss=0.75906589
+val:255/313, loss=0.75443862
+val:258/313, loss=0.75860167
+val:261/313, loss=0.75751388
+val:264/313, loss=0.75829117
+val:267/313, loss=0.75755984
+val:270/313, loss=0.76188999
+val:273/313, loss=0.75820514
+val:276/313, loss=0.75883478
+val:279/313, loss=0.75664985
+val:282/313, loss=0.76079649
+val:285/313, loss=0.75907681
+val:288/313, loss=0.75621549
+val:291/313, loss=0.75632826
+val:294/313, loss=0.75698960
+val:297/313, loss=0.75931728
+val:300/313, loss=0.75717274
+val:303/313, loss=0.76142309
+val:306/313, loss=0.75909772
+val:309/313, loss=0.76021665
+val:312/313, loss=0.76003319
+loss=0.75863797
+Train:000042/600000, Loss:5.33e-01, lr:1.00e-03, gradient:3.159410e-01
+Train:000044/600000, Loss:6.06e-01, lr:1.00e-03, gradient:2.888815e-01
+Train:000046/600000, Loss:6.18e-01, lr:1.00e-03, gradient:8.548324e-01
+Train:000048/600000, Loss:5.39e-01, lr:1.00e-03, gradient:6.103263e-01
+Train:000050/600000, Loss:5.48e-01, lr:1.00e-03, gradient:3.454455e-01
+Elapsed time: 10.02s
+============================================================
+313 313
+val:003/313, loss=0.76370668
+val:006/313, loss=0.76844609
+val:009/313, loss=0.76651311
+val:012/313, loss=0.75999846
+val:015/313, loss=0.76903520
+val:018/313, loss=0.76725539
+val:021/313, loss=0.76739291
+val:024/313, loss=0.76840329
+val:027/313, loss=0.76821216
+val:030/313, loss=0.76631681
+val:033/313, loss=0.77008816
+val:036/313, loss=0.76831788
+val:039/313, loss=0.76857525
+val:042/313, loss=0.76770010
+val:045/313, loss=0.76469940
+val:048/313, loss=0.76694530
+val:051/313, loss=0.76441566
+val:054/313, loss=0.76899038
+val:057/313, loss=0.77007614
+val:060/313, loss=0.76862593
+val:063/313, loss=0.76901577
+val:066/313, loss=0.76585642
+val:069/313, loss=0.76610998
+val:072/313, loss=0.76762176
+val:075/313, loss=0.76913581
+val:078/313, loss=0.76697578
+val:081/313, loss=0.76686376
+val:084/313, loss=0.77103309
+val:087/313, loss=0.76564840
+val:090/313, loss=0.76551272
+val:093/313, loss=0.76469809
+val:096/313, loss=0.76991409
+val:099/313, loss=0.76489508
+val:102/313, loss=0.76514481
+val:105/313, loss=0.76674104
+val:108/313, loss=0.76659552
+val:111/313, loss=0.76724082
+val:114/313, loss=0.76673154
+val:117/313, loss=0.76499112
+val:120/313, loss=0.76507743
+val:123/313, loss=0.77015311
+val:126/313, loss=0.76614515
+val:129/313, loss=0.76691651
+val:132/313, loss=0.76769197
+val:135/313, loss=0.77052297
+val:138/313, loss=0.76693529
+val:141/313, loss=0.76860940
+val:144/313, loss=0.77076815
+val:147/313, loss=0.76633424
+val:150/313, loss=0.77335012
+val:153/313, loss=0.76754922
+val:156/313, loss=0.76584148
+val:159/313, loss=0.77117491
+val:162/313, loss=0.76509327
+val:165/313, loss=0.76822521
+val:168/313, loss=0.76736526
+val:171/313, loss=0.76724454
+val:174/313, loss=0.76203404
+val:177/313, loss=0.76566194
+val:180/313, loss=0.76746935
+val:183/313, loss=0.76864467
+val:186/313, loss=0.77057193
+val:189/313, loss=0.76600003
+val:192/313, loss=0.76751816
+val:195/313, loss=0.76713941
+val:198/313, loss=0.76504940
+val:201/313, loss=0.76884145
+val:204/313, loss=0.76686029
+val:207/313, loss=0.76678467
+val:210/313, loss=0.76740736
+val:213/313, loss=0.76625776
+val:216/313, loss=0.76525895
+val:219/313, loss=0.77008255
+val:222/313, loss=0.76626223
+val:225/313, loss=0.76327537
+val:228/313, loss=0.76612900
+val:231/313, loss=0.76863748
+val:234/313, loss=0.76077632
+val:237/313, loss=0.77137411
+val:240/313, loss=0.76910329
+val:243/313, loss=0.76709924
+val:246/313, loss=0.76783838
+val:249/313, loss=0.76449426
+val:252/313, loss=0.76894055
+val:255/313, loss=0.76667668
+val:258/313, loss=0.76999060
+val:261/313, loss=0.76714607
+val:264/313, loss=0.76995319
+val:267/313, loss=0.76506752
+val:270/313, loss=0.77072175
+val:273/313, loss=0.76909665
+val:276/313, loss=0.76614829
+val:279/313, loss=0.76836187
+val:282/313, loss=0.76430305
+val:285/313, loss=0.76633559
+val:288/313, loss=0.76819501
+val:291/313, loss=0.76392692
+val:294/313, loss=0.76684217
+val:297/313, loss=0.76384987
+val:300/313, loss=0.77169883
+val:303/313, loss=0.76846133
+val:306/313, loss=0.76992754
+val:309/313, loss=0.76841857
+val:312/313, loss=0.76837420
+loss=0.76730352
+Train:000052/600000, Loss:5.74e-01, lr:1.00e-03, gradient:5.456087e-01
+Train:000054/600000, Loss:5.31e-01, lr:1.00e-03, gradient:3.091450e-01
+Train:000056/600000, Loss:6.00e-01, lr:1.00e-03, gradient:3.340630e-01
+Train:000058/600000, Loss:6.01e-01, lr:1.00e-03, gradient:1.022691e-01
+Train:000060/600000, Loss:5.77e-01, lr:1.00e-03, gradient:4.967268e-01
+Elapsed time: 10.10s
+============================================================
+313 313
+val:003/313, loss=0.77932678
+val:006/313, loss=0.77976193
+val:009/313, loss=0.77558875
+val:012/313, loss=0.77649516
+Traceback (most recent call last):
+  File "main.py", line 32, in <module>
+    trainer.train()
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 323, in train
+    self.validation()
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 1130, in validation
+    for ii, data in enumerate(self.dataloaders[phase]):
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 631, in __next__
+    data = self._next_data()
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 675, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 51, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 51, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/data/FFHQ/DifFace_Thesis/datapipe/datasets.py", line 337, in __getitem__
+    mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
+  File "/data/FFHQ/DifFace_Thesis/datapipe/masks.py", line 475, in __call__
+    result = gen(img, iter_i=iter_i, raw_image=raw_image)
+  File "/data/FFHQ/DifFace_Thesis/datapipe/masks.py", line 377, in __call__
+    mask = util_image.imread(self.list_mask_path[index],chn='gray',dtype='float32')
+  File "/data/FFHQ/DifFace_Thesis/utils/util_image.py", line 539, in imread
+    im = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)  # BGR, uint8
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "main.py", line 32, in <module>
+    trainer.train()
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 323, in train
+    self.validation()
+  File "/data/FFHQ/DifFace_Thesis/trainer.py", line 1130, in validation
+    for ii, data in enumerate(self.dataloaders[phase]):
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 631, in __next__
+    data = self._next_data()
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 675, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 51, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/usr/local/anaconda3/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 51, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/data/FFHQ/DifFace_Thesis/datapipe/datasets.py", line 337, in __getitem__
+    mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
+  File "/data/FFHQ/DifFace_Thesis/datapipe/masks.py", line 475, in __call__
+    result = gen(img, iter_i=iter_i, raw_image=raw_image)
+  File "/data/FFHQ/DifFace_Thesis/datapipe/masks.py", line 377, in __call__
+    mask = util_image.imread(self.list_mask_path[index],chn='gray',dtype='float32')
+  File "/data/FFHQ/DifFace_Thesis/utils/util_image.py", line 539, in imread
+    im = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)  # BGR, uint8
+KeyboardInterrupt

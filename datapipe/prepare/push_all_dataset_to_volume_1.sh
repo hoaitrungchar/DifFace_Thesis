@@ -35,12 +35,12 @@ declare -a RUNS=(
   # "/data/FFHQ/Dataset/Places2/test_256|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Places2_test.txt|20"
   # "/data/FFHQ/Dataset/Places2/val_256|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Places2_val.txt|20"
   # "/data/FFHQ/Dataset/Places2/train|4999|/data/FFHQ/Temp_dataset2|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Places2_train.txt|20"
-  # "/data/FFHQ/Dataset/ImageNet/val|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_ImageNet_val.txt|20"
-  # "/data/FFHQ/Dataset/ImageNet/test|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_ImageNet_test.txt|20"
-  # "/data/FFHQ/Dataset/ImageNet/train|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_ImageNet_train.txt|20"
+  "/data/FFHQ/Dataset/ImageNet/val|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_ImageNet_val.txt|20"
+  "/data/FFHQ/Dataset/ImageNet/test|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_ImageNet_test.txt|20"
+  "/data/FFHQ/Dataset/ImageNet/train|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_ImageNet_train.txt|20"
   # "/data/FFHQ/Dataset/Mask/test|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Mask_test.txt|20"
   # "/data/FFHQ/Dataset/Mask/val|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Mask_val.txt|20"
-  "/data/FFHQ/Dataset/Mask/train|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Mask_train.txt|20"
+  # "/data/FFHQ/Dataset/Mask/train|4999|/data/FFHQ/Temp_dataset|/data/FFHQ/DifFace_Thesis/datapipe/prepare/Vol_Mask_train.txt|20"
 )
 
 

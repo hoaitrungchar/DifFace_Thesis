@@ -1,0 +1,10 @@
+{"time":"2025-01-24T10:31:26.011410344Z","level":"INFO","msg":"stream: starting","core version":"0.19.4","symlink path":"/data/FFHQ/DifFace_Thesis/wandb/run-20250124_103125-ehvwmwhe/logs/debug-core.log"}
+{"time":"2025-01-24T10:31:26.125233712Z","level":"INFO","msg":"created new stream","id":"ehvwmwhe"}
+{"time":"2025-01-24T10:31:26.125832177Z","level":"INFO","msg":"stream: started","id":"ehvwmwhe"}
+{"time":"2025-01-24T10:31:26.125840209Z","level":"INFO","msg":"handler: started","stream_id":"ehvwmwhe"}
+{"time":"2025-01-24T10:31:26.125855853Z","level":"INFO","msg":"sender: started","stream_id":"ehvwmwhe"}
+{"time":"2025-01-24T10:31:26.125922551Z","level":"INFO","msg":"writer: Do: started","stream_id":"ehvwmwhe"}
+{"time":"2025-01-24T10:31:26.602651892Z","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-01-24T11:30:48.065036041Z","level":"INFO","msg":"stream: closing","id":"ehvwmwhe"}
+{"time":"2025-01-24T11:30:48.065083324Z","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-01-24T11:30:48.065932588Z","level":"INFO","msg":"Stopped system monitor"}

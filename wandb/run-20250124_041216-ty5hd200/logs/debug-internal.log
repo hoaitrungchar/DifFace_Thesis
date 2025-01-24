@@ -1,0 +1,15 @@
+{"time":"2025-01-24T04:12:16.45294209Z","level":"INFO","msg":"stream: starting","core version":"0.19.4","symlink path":"/data/FFHQ/DifFace_Thesis/wandb/run-20250124_041216-ty5hd200/logs/debug-core.log"}
+{"time":"2025-01-24T04:12:16.564350218Z","level":"INFO","msg":"created new stream","id":"ty5hd200"}
+{"time":"2025-01-24T04:12:16.56442404Z","level":"INFO","msg":"stream: started","id":"ty5hd200"}
+{"time":"2025-01-24T04:12:16.564517628Z","level":"INFO","msg":"handler: started","stream_id":"ty5hd200"}
+{"time":"2025-01-24T04:12:16.564550802Z","level":"INFO","msg":"writer: Do: started","stream_id":"ty5hd200"}
+{"time":"2025-01-24T04:12:16.564631748Z","level":"INFO","msg":"sender: started","stream_id":"ty5hd200"}
+{"time":"2025-01-24T04:12:17.049547714Z","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-01-24T04:13:15.550079267Z","level":"INFO","msg":"stream: closing","id":"ty5hd200"}
+{"time":"2025-01-24T04:13:15.550130391Z","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-01-24T04:13:15.551109775Z","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-01-24T04:13:17.179649573Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-01-24T04:13:17.642161549Z","level":"INFO","msg":"handler: closed","stream_id":"ty5hd200"}
+{"time":"2025-01-24T04:13:17.642212184Z","level":"INFO","msg":"sender: closed","stream_id":"ty5hd200"}
+{"time":"2025-01-24T04:13:17.642192279Z","level":"INFO","msg":"writer: Close: closed","stream_id":"ty5hd200"}
+{"time":"2025-01-24T04:13:17.642369676Z","level":"INFO","msg":"stream: closed","id":"ty5hd200"}

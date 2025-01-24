@@ -1,0 +1,84 @@
+{
+  "os": "Linux-5.4.0-189-generic-x86_64-with-glibc2.10",
+  "python": "CPython 3.8.8",
+  "startedAt": "2025-01-23T07:09:39.291341Z",
+  "args": [
+    "--cfg_path",
+    "/data/FFHQ/DifFace_Thesis/configs/training/predicted_mask_SwinUnet.yaml",
+    "--save_dir",
+    "/data/FFHQ/mask_log"
+  ],
+  "program": "main.py",
+  "codePath": "main.py",
+  "git": {
+    "remote": "https://github.com/hoaitrungchar/DifFace_Thesis.git",
+    "commit": "46d9a9b64f00d6e6aba3f5d08eb204dad5578e54"
+  },
+  "email": "hoaitrungchar@gmail.com",
+  "root": "/data/FFHQ/DifFace_Thesis",
+  "host": "u116613",
+  "executable": "/usr/local/anaconda3/bin/python",
+  "codePathLocal": "main.py",
+  "cpu_count": 48,
+  "cpu_count_logical": 96,
+  "gpu": "NVIDIA RTX A6000",
+  "gpu_count": 7,
+  "disk": {
+    "/": {
+      "total": "1877998821376",
+      "used": "1469884395520"
+    }
+  },
+  "memory": {
+    "total": "540953071616"
+  },
+  "cpu": {
+    "count": 48,
+    "countLogical": 96
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "memoryTotal": "51527024640",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    }
+  ],
+  "cudaVersion": "12.3"
+}

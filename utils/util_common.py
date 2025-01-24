@@ -72,7 +72,7 @@ def scan_files_from_folder(dir_paths, exts, recursive=True):
         dir_pathas: str or list.
         exts: list
     '''
-    dir_paths = [dir_paths, ] if not isinstance(dir_paths, list) else dir_paths
+    # dir_paths = [dir_paths, ] if not isinstance(dir_paths, list) else dir_paths
 
     file_paths = []
     for current_dir in dir_paths:

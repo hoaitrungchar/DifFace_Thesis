@@ -360,7 +360,7 @@ class IrregularNvidiaMask:
         self.list_mask_path = self.generate_list_image()
     
     def generate_list_image(self):
-        list_image_path=list(map(lambda x: os.path.join(self.folder_mask_path,x),os.listdir(self.folder_mask_path)))
+        list_image_path=util_common.scan_files_from_folder(self.folder_mask_path,['png', 'jpg', 'jpeg', 'JPEG', 'bmp'])
         # list_image_path=[]
         # for folder in list_folder_path:
         #     if not os.path.isdir(folder):
