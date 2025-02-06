@@ -23,12 +23,12 @@ model:
 
 data:
   train:
-    type: PriorTraining 
+    type: PriorTraining
     params:
       dataset_type: train
-      dir_path: [/data/FFHQ/Dataset/FFHQ/train]
-      noise_path1: [/data/FFHQ/Dataset/CelebA-HQ/train]
-      noise_path2: [/data/FFHQ/Dataset/ImageNet/train]
+      dir_path: [/root/data/FFHQ/train]
+      noise_path1: [/root/data/CelebA-HQ/train]
+      noise_path2: [/root/data/ImageNet/train1,/root/data/ImageNet/train2,/root/data/ImageNet/train3,/root/data/ImageNet/train4,/root/data/ImageNet/train5,/root/data/ImageNet/train6,/root/data/ImageNet/train7,/root/data/ImageNet/train8,/root/data/ImageNet/train9,/root/data/ImageNet/train10,/root/data/ImageNet/train11,/root/data/ImageNet/train12,/root/data/ImageNet/train13]
       transform_type: default
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -41,22 +41,23 @@ data:
         crop_size: 256
       need_path: False
       im_exts: [png, jpg, JPEG]
-      recursive: False
+      recursive: True
       kernel_gaussian_size: 3
       img_size: 256
-      folder_mask_path: [/data/FFHQ/Dataset/Mask/train]
+      folder_mask_path: [/root/data/Mask/train]
       type_prior: edgeCanny
       mask_kwargs:
         nvidia_mask_proba: 1
         nvidia_mask_kwargs:
-          folder_mask_path: [/data/FFHQ/Dataset/Mask/train]
+          folder_mask_path: [/root/data/Mask/train]
+          recursive: True
   val:
-    type: PriorTraining 
+    type: PriorTraining
     params:
       dataset_type: val
-      dir_path: [/data/FFHQ/Dataset/FFHQ/val]
-      noise_path1: [/data/FFHQ/Dataset/CelebA-HQ/val]
-      noise_path2: [/data/FFHQ/Dataset/ImageNet/val]
+      dir_path: [/root/data/FFHQ/val]
+      noise_path1: [/root/data/CelebA-HQ/val]
+      noise_path2: [/root/data/ImageNet/val]
       transform_type: default
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -69,34 +70,35 @@ data:
         crop_size: 256
       need_path: False
       im_exts: [png, jpg, JPEG]
-      recursive: False
+      recursive: True
       kernel_gaussian_size: 3
       img_size: 256
-      folder_mask_path: [/data/FFHQ/Dataset/Mask/val]
       type_prior: edgeCanny
+      folder_mask_path: [/root/data/Mask/val]
       mask_kwargs:
         nvidia_mask_proba: 1
         nvidia_mask_kwargs:
-          folder_mask_path: [/data/FFHQ/Dataset/Mask/val]
+          folder_mask_path: [/root/data/Mask/val]
+          recursive: True
     
 
 train:
-  lr: 1e-3
+  lr: 1e-4
   lr_min: 1e-6
-  batch: [32, 32]   # batchsize for training and validation
-  microbatch: 32
-  num_workers: 8
+  batch: [250, 250]   # batchsize for training and validation
+  microbatch: 250
+  num_workers: 32
   prefetch_factor: 2
-  iterations: 600000
+  iterations: 100000
   weight_decay: 0
-  save_freq: 10
+  save_freq: 220
   val_freq: ${train.save_freq}
-  log_freq: [2, 2, 3]
-  ema_rate: 0.999
-  loss_type: WCE
+  log_freq: [220, 2200, 5]
+  loss_type: BCE
   tf_logging: True
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting
-group_name: FFHQ_prior
-name: test
+group_name: FFHQ_edgeCanny
+name: batch_250||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3||BCE_loss
+wandb_id: ug2yx01o

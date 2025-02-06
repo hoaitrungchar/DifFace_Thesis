@@ -1,0 +1,158 @@
+trainer:
+  target: trainer.TrainerDiffusion
+
+model:
+  target: models.unet.UNetModel
+  params:
+    image_size: 512
+    in_channels: 3
+    model_channels: 32
+    out_channels: 6
+    attention_resolutions: [32, 16, 8]
+    dropout: 0
+    channel_mult: [1, 2, 4, 8, 8, 16, 16]
+    num_res_blocks: [1, 2, 2, 2, 2, 3, 4]
+    conv_resample: True
+    dims: 2
+    use_fp16: False
+    num_head_channels: 64
+    use_scale_shift_norm: True
+    resblock_updown: False
+    use_new_attention_order: False
+
+diffusion:
+  target: models.script_util.create_gaussian_diffusion
+  params:
+    steps: 1000
+    learn_sigma: True
+    sigma_small: False
+    noise_schedule: linear
+    use_kl: False
+    predict_xstart: False
+    rescale_timesteps: False
+    rescale_learned_sigmas: True
+    timestep_respacing: ""
+
+data:
+  train:
+    type: PriorTraining
+    params:
+      dataset_type: train
+      dir_path: [/root/data/FFHQ/train]
+      noise_path1: [/root/data/CelebA-HQ/train]
+      noise_path2: [/root/data/ImageNet/train1,/root/data/ImageNet/train2,/root/data/ImageNet/train3,/root/data/ImageNet/train4,/root/data/ImageNet/train5,/root/data/ImageNet/train6,/root/data/ImageNet/train7,/root/data/ImageNet/train8,/root/data/ImageNet/train9,/root/data/ImageNet/train10,/root/data/ImageNet/train11,/root/data/ImageNet/train12,/root/data/ImageNet/train13]
+      transform_type: default
+      transform_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
+      need_path: False
+      im_exts: [png, jpg, JPEG]
+      recursive: True
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path: [/root/data/Mask/train]
+      type_prior: edgeCanny
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: [/root/data/Mask/train]
+          recursive: True
+
+
+  val:
+    type: PriorTraining
+    params:
+      dataset_type: val
+      dir_path: [/root/data/FFHQ/val]
+      noise_path1: [/root/data/CelebA-HQ/val]
+      noise_path2: [/root/data/ImageNet/val]
+      transform_type: default
+      transform_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
+      need_path: False
+      im_exts: [png, jpg, JPEG]
+      recursive: True
+      kernel_gaussian_size: 3
+      img_size: 256
+      type_prior: edgeCanny
+      folder_mask_path: [/root/data/Mask/val]
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: [/root/data/Mask/val]
+          recursive: True
+
+model_mask_target: models.SwinUnet.SwinUnet
+model_mask_ckpt: 
+model_mask_params:
+  config: 1
+  patch_size: 4
+  num_classes: 1        
+  embed_dim: 96      
+  depths: [2,2,2,2]        
+  depths_decoder: [1, 2, 2, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 4
+  qkv_bias: True
+  in_chans: 3
+  qk_scale: null
+  drop_rate: 0.
+  drop_path_rate: 0.1
+  ape: False
+  patch_norm: True
+  use_checkpoint: False
+
+
+model_prior_target: models.SwinUnet.SwinUnet
+model_prior_ckpt: 
+model_prior_params:
+  config: 1
+  patch_size: 4
+  num_classes: 1        
+  embed_dim: 96      
+  depths: [2,2,2,2]        
+  depths_decoder: [1, 2, 2, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 4
+  qkv_bias: True
+  in_chans: 3
+  qk_scale: null
+  drop_rate: 0.
+  drop_path_rate: 0.1
+  ape: False
+  patch_norm: True
+  use_checkpoint: False
+train:
+  lr: 1e-4
+  lr_min: 1e-6
+  batch: [250, 250]   # batchsize for training and validation
+  microbatch: 250
+  num_workers: 32
+  prefetch_factor: 2
+  iterations: 100000
+  weight_decay: 0
+  save_freq: 250
+  val_freq: ${train.save_freq}
+  log_freq: [250, 2500, 5]
+  loss_type: WCE
+  tf_logging: True
+  local_logging: True
+
+
+project_name: Thesis_blind_image_inpainting
+group_name: FFHQ_Diffusion_edgeCanny
+# name: batch_220||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
+# wandb_id: twfjzaja

@@ -14,7 +14,7 @@ from utils import util_image
 from utils import util_common
 from PIL import Image, ImageDraw
 from typing import Tuple, List, Union
-
+from concurrent.futures import ThreadPoolExecutor
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as T
@@ -355,12 +355,15 @@ class CAMask:
         return mask
     
 class IrregularNvidiaMask:
-    def __init__(self, folder_mask_path):
+    def __init__(self, folder_mask_path, recursive):
         self.folder_mask_path = folder_mask_path
+        self.recursive = recursive
         self.list_mask_path = self.generate_list_image()
+        
     
     def generate_list_image(self):
-        list_image_path=util_common.scan_files_from_folder(self.folder_mask_path,['png', 'jpg', 'jpeg', 'JPEG', 'bmp'])
+        list_image_path=util_common.scan_files_from_folder(self.folder_mask_path,['png', 'jpg', 'jpeg', 'JPEG', 'bmp'], self.recursive)
+        print('len list mask', len(list_image_path))
         # list_image_path=[]
         # for folder in list_folder_path:
         #     if not os.path.isdir(folder):
@@ -386,6 +389,44 @@ class IrregularNvidiaMask:
         # mask = T.ToTensor()(mask)
         # mask = torch.where(mask < 0.5, 0., 1.).float()
         # return mask
+
+class IrregularNvidiaModalMask:
+    def __init__(self, folder_mask_path, recursive):
+        self.folder_mask_path = folder_mask_path
+        self.recursive = recursive
+        self.list_image_path = self.generate_list_image()
+        self.cache_modal_mask={}
+        
+    
+    def generate_list_image(self):
+        list_image_path=util_common.scan_files_from_folder(self.folder_mask_path,['png', 'jpg', 'jpeg', 'JPEG', 'bmp'], self.recursive)
+        print('len list mask', len(list_image_path))
+
+        return list_image_path
+    
+    def read_mask_image(self,path,img):
+        h, w = img.shape[1:]
+        if path in self.cache_modal_mask:
+            mask=self.cache_modal_mask[path]
+        else:
+            mask = util_image.imread(path,chn='gray',dtype='float32')
+            self.cache_modal_mask[path] = mask
+        # mask=cv2.bitwise_not(mask)
+        mask = cv2.resize(mask, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
+        mask= np.where(mask<0.5, 0, 1)
+        mask = mask.reshape(1,h,w)
+        mask=mask.astype(np.float32)
+        return mask
+    
+    def __call__(self, img, iter_i=None, raw_image=None):
+        """
+        img: c x h x w, torch tensor
+        """
+        
+        index = random.randint(0,len(self.list_image_path)-1)
+        return  self.read_mask_image(self.list_image_path[index],img)
+
+
 class MixedMaskGenerator:
     def __init__(self, irregular_proba=0, irregular_kwargs=None,
                  box_proba=0, box_kwargs=None,
@@ -396,6 +437,7 @@ class MixedMaskGenerator:
                  half_proba=0, half_kwargs=None,
                  ca_proba=0, ca_kwargs=None,
                  nvidia_mask_proba=0, nvidia_mask_kwargs=None,
+                 nvidia_mask_modal_proba=0, nvidia_mask_modal_kwargs = None,
                  alterline_proba=0,
                  invert_proba=0):
         self.probas = []
@@ -460,6 +502,12 @@ class MixedMaskGenerator:
             if nvidia_mask_kwargs is None:
                 nvidia_mask_kwargs = {}
             self.gens.append(IrregularNvidiaMask(**nvidia_mask_kwargs))
+
+        if nvidia_mask_modal_proba > 0:
+            self.probas.append(nvidia_mask_modal_proba)
+            if nvidia_mask_modal_kwargs is None:
+                nvidia_mask_modal_kwargs = {}
+            self.gens.append(IrregularNvidiaModalMask(**nvidia_mask_modal_kwargs))
 
         if alterline_proba > 0:
             self.probas.append(alterline_proba)

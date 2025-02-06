@@ -6,7 +6,7 @@ import random
 import torch
 import torchvision as thv
 from torch.utils.data import Dataset
-
+from concurrent.futures import ThreadPoolExecutor
 from utils import util_sisr
 from utils import util_image
 from utils import util_common
@@ -91,8 +91,16 @@ def create_dataset(dataset_config):
         dataset = InpaintingDataSet(**dataset_config['params'])
     elif dataset_config['type'] == 'MaskTraining':
         dataset = MaskTrainingDataset(**dataset_config['params'])
+    elif dataset_config['type'] == 'MaskTrainingModal':
+        dataset = MaskTrainingModalDataset(**dataset_config['params'])
+    elif dataset_config['type'] == 'MaskTrainingModal':
+        dataset = MaskTrainingModalDataset(**dataset_config['params'])
     elif dataset_config['type'] == 'PriorTraining':
         dataset = MaskTrainingDataset(**dataset_config['params'])
+    elif dataset_config['type'] == 'PriorTraining':
+        dataset = PriorTrainingDataset(**dataset_config['params'])
+    elif dataset_config['type'] == "DiffusionTraining":
+        dataset = DiffusionTrainingDataset(**dataset_config['params'])
     else:
         raise NotImplementedError(dataset_config['type'])
 
@@ -256,7 +264,6 @@ class InpaintingDataSet(Dataset):
         self.file_paths = random.sample(self.file_paths_all, self.length)
 
 
-
 class MaskTrainingDataset(Dataset):
     def __init__(
             self,
@@ -334,6 +341,111 @@ class MaskTrainingDataset(Dataset):
                 edge_img=util_image.getpriorcanny(im_path,100,200)
                 edge_img = torch.tensor(edge_img)
                 out_dict['prior']= edge_img
+        mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
+        self.iter_i += 1
+        mask = torch.tensor(mask)
+        mask = 1-mask #Convert mask to 1 (keep) and 0 (noise)
+        # mask = self.kernel_gaussian(mask)
+        mask_reshape=self.kernel_gaussian(mask)
+        noise = self.sameple_noise()
+        if mask.shape[0] == 1:
+            mask_reshape = mask.expand(3, -1, -1)  # Expand along the channel dimension
+        mask_reshape = mask_reshape.to(im.device, dtype=im.dtype)
+        #Low quality = high quality *(mask_reshape) + (1-mask_reshape)*noise
+        im_masked = im *  (mask_reshape) + (1-mask_reshape)*noise
+        out_dict['lq'] = im_masked
+        out_dict['mask'] = mask
+        
+        if self.need_path:
+            out_dict['path'] = im_path
+        # print(out_dict['lq'].shape, out_dict['lq'].shape,  out_dict['mask'] .shape)
+        return out_dict
+
+    def reset_dataset(self):
+        self.file_paths = random.sample(self.file_paths_all, self.length)
+
+class MaskTrainingModalDataset(Dataset):
+    def __init__(
+            self,
+            dataset_type,
+            dir_path,
+            noise_path1,
+            noise_path2,
+            transform_type,
+            transform_kwargs,
+            transform_noise_type,
+            transform_noise_kwargs,
+            mask_kwargs,
+            folder_mask_path,
+            length=None,
+            need_path=False,
+            im_exts=['png', 'jpg', 'jpeg', 'JPEG', 'bmp'],
+            recursive=False,
+            img_size = 256,
+            type_prior=None,
+            kernel_gaussian_size=3
+            ):
+        super().__init__()
+        file_paths_all=[]
+        file_paths_all += util_common.scan_files_from_folder(dir_path, im_exts, recursive)
+        print('len_file_path_all',len(file_paths_all))
+        self.file_paths_all = file_paths_all if length is None else random.sample(file_paths_all, length)
+        self.cache_img_gt = {}
+        self.cache_img_noise = {}
+        self.dataset_type = dataset_type
+        self.type_prior = type_prior
+        self.length = length
+        self.need_path = need_path
+        self.transform = get_transforms(transform_type, transform_kwargs)
+        self.transform_noise = get_transforms(transform_noise_type,transform_noise_kwargs)
+        self.kernel_gaussian = thv.transforms.GaussianBlur(kernel_size=kernel_gaussian_size)
+        self.mask_generator = MixedMaskGenerator(**mask_kwargs)
+        # self.mask_generator = IrregularNvidiaMask(folder_mask_path)
+        self.iter_i = 0
+        self.noise_path1 = []
+        self.noise_path2 = []
+        self.img_size = img_size
+        if not self.noise_path1 is None and not self.noise_path2 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        elif not self.noise_path1 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+        elif not self.noise_path2 is None:
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        print(len(self.noise_path1))
+        print(len(self.noise_path2))
+        self.file_paths_noise=self.noise_path1+self.noise_path2
+
+        print('len_file_paths_noise',len(self.file_paths_noise))
+
+    def __len__(self):
+        return len(self.file_paths_all)
+
+    def sameple_noise(self):
+        im_noise_path = self.file_paths_noise[random.randint(0,len(self.file_paths_noise)-1)]  
+        if im_noise_path in self.cache_img_noise:
+            noise = self.cache_img_noise[im_noise_path]
+        else:
+            noise = util_image.imread(im_noise_path, chn='rgb', dtype='float32')
+            self.cache_img_noise[im_noise_path] = noise
+
+        noise = self.transform_noise(noise)
+        return noise 
+    
+    def get_prior(self):
+        pass
+    
+    def __getitem__(self, index):
+        im_path = self.file_paths_all[index]
+        if im_path in self.cache_img_gt:
+            im = self.cache_img_gt[im_path] 
+        else:
+            im = util_image.imread(im_path, chn='rgb', dtype='float32')
+            self.cache_img_gt[im_path] = im
+        
+        im = self.transform(im)        # c x h x w
+        out_dict = {'gt':im, }
+        self.iter_i+=1
         mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
         self.iter_i += 1
         mask = torch.tensor(mask)
@@ -457,6 +569,120 @@ class PriorTrainingDataset(Dataset):
     def reset_dataset(self):
         self.file_paths = random.sample(self.file_paths_all, self.length)
 
+
+class DiffusionTrainingDataset(Dataset):
+    def __init__(
+            self,
+            dataset_type,
+            dir_path,
+            noise_path1,
+            noise_path2,
+            transform_type,
+            transform_kwargs,
+            transform_noise_type,
+            transform_noise_kwargs,
+            mask_kwargs,
+            model_mask_target,
+            model_mask_ckpt,
+            model_mask_params,
+            model_prior_target,
+            model_prior_ckpt,
+            model_prior_params,
+            length=None,
+            need_path=False,
+            im_exts=['png', 'jpg', 'jpeg', 'JPEG', 'bmp'],
+            recursive=False,
+            img_size = 256,
+            type_prior=None,
+            kernel_gaussian_size=3,
+            ):
+        super().__init__()
+        file_paths_all=[]
+        file_paths_all += util_common.scan_files_from_folder(dir_path, im_exts, recursive)
+        print('len_file_path_all',len(file_paths_all))
+        self.file_paths = file_paths_all if length is None else random.sample(file_paths_all, length)
+        self.file_paths_all = file_paths_all
+        self.dataset_type = dataset_type
+        self.type_prior = type_prior
+        self.length = length
+        self.need_path = need_path
+        self.transform = get_transforms(transform_type, transform_kwargs)
+        self.transform_noise = get_transforms(transform_noise_type,transform_noise_kwargs)
+        self.kernel_gaussian = thv.transforms.GaussianBlur(kernel_size=kernel_gaussian_size)
+        self.mask_generator = MixedMaskGenerator(**mask_kwargs)
+        # self.mask_generator = IrregularNvidiaMask(folder_mask_path)
+        self.iter_i = 0
+        self.noise_path1 = []
+        self.noise_path2 = []
+        self.img_size = img_size
+        if not self.noise_path1 is None and not self.noise_path2 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        elif not self.noise_path1 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+        elif not self.noise_path2 is None:
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        print(len(self.noise_path1))
+        print(len(self.noise_path2))
+        self.file_paths_noise=self.noise_path1+self.noise_path2
+        print('len_file_paths_noise',len(self.file_paths_noise))
+        checkpoint = torch.load('path/to/your_checkpoint.pth', map_location=torch.device('cpu'))
+        self.model_initial_mask = util_common.get_obj_from_str(string=model_mask_target)(**model_mask_params)
+        self.model_initial_prior = util_common.get_obj_from_str(string=model_mask_target)(**model_mask_params)
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def sameple_noise(self):
+        noise = util_image.imread(self.file_paths_noise[random.randint(0,len(self.file_paths_noise)-1)], chn='rgb', dtype='float32')        
+        # print(noise.shape)
+        # print(self.transform_noise)
+        noise = self.transform_noise(noise)
+        return noise 
+    
+    def get_prior(self):
+        pass
+
+    def sample_initial_mask(self):
+        pass
+
+    def sample_initial_prior(self):
+        pass
+
+    
+    def __getitem__(self, index):
+        im_path = self.file_paths[index]
+        im = util_image.imread(im_path, chn='rgb', dtype='float32')
+        im = self.transform(im)        # c x h x w
+        out_dict = {'gt':im, }
+        self.iter_i+=1
+        
+        if not (self.type_prior is None):
+            if self.type_prior == 'edgeCanny':
+                edge_img=util_image.getpriorcanny(im_path,100,200)
+                edge_img = torch.tensor(edge_img)
+                out_dict['prior']= edge_img
+        mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
+        self.iter_i += 1
+        mask = torch.tensor(mask)
+        mask = 1-mask #Convert mask to 1 (keep) and 0 (noise)
+        # mask = self.kernel_gaussian(mask)
+        mask_reshape=self.kernel_gaussian(mask)
+        noise = self.sameple_noise()
+        if mask.shape[0] == 1:
+            mask_reshape = mask.expand(3, -1, -1)  # Expand along the channel dimension
+        mask_reshape = mask_reshape.to(im.device, dtype=im.dtype)
+        #Low quality = high quality *(mask_reshape) + (1-mask_reshape)*noise
+        im_masked = im *  (mask_reshape) + (1-mask_reshape)*noise
+        out_dict['lq'] = im_masked
+        
+        if self.need_path:
+            out_dict['path'] = im_path
+        # print(out_dict['lq'].shape, out_dict['lq'].shape,  out_dict['mask'] .shape)
+        return out_dict
+
+    def reset_dataset(self):
+        self.file_paths = random.sample(self.file_paths_all, self.length)
 
 
 # class DiffusionTrainingDataset(Dataset):

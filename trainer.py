@@ -47,7 +47,10 @@ class TrainerBase:
     def __init__(self, configs):
         self.configs = configs
         wandb.login(key=os.getenv("WANDB_API_KEY"))
-        wandb.init(project=configs.project_name, group= configs.group_name, name=configs.name)
+        if self.configs.wandb_id is None:
+            wandb.init(project=configs.project_name, group= configs.group_name, name=configs.name)
+        else:
+            wandb.init(project=configs.project_name,id = self.configs.wandb_id, resume = "must")
         # setup distributed training: self.num_gpus, self.rank
         self.setup_dist()
 
@@ -283,7 +286,7 @@ class TrainerBase:
                     batch_size=self.configs.train.batch[1],
                     shuffle=False,
                     drop_last=False,
-                    num_workers=0,
+                    num_workers=self.configs.train.num_workers,
                     pin_memory=True,
                     )
 
@@ -335,7 +338,7 @@ class TrainerBase:
         # close the tensorboard
         if self.rank == 0:
             self.close_logger()
-
+        wandb.finish()
     def training_step(self, data):
         pass
 
@@ -792,6 +795,44 @@ class TrainerDiffusion(TrainerBase):
         params = self.configs.diffusion.get('params', dict)
         self.base_diffusion = util_common.get_obj_from_str(self.configs.diffusion.target)(**params)
         self.sample_scheduler_diffusion = UniformSampler(self.base_diffusion.num_timesteps)
+        self.load_initial_model()
+
+
+    def load_initial_model(self):
+        params_mask = self.configs.get('model_mask_params', dict)
+        model_mask = util_common.get_obj_from_str(self.configs.model_mask_target)(**params_mask)
+        if self.num_gpus >1:
+            model_mask = nn.DataParallel(model_mask)
+        self.model_mask = model_mask.to('cuda')
+        if hasattr(self.configs, 'model_prior_ckpt') and self.configs.model_mask_ckpt is not None:
+            ckpt_path = self.configs.model_mask_ckpt
+            if self.rank == 0:
+                self.logger.info(f"Initializing model from {ckpt_path}")
+            ckpt = torch.load(ckpt_path, map_location=f"cuda:{self.rank}")
+            if 'state_dict' in ckpt:
+                ckpt = ckpt['state_dict']
+            util_net.reload_model(self.model_mask, ckpt)
+        self.model_mask.eval()
+
+
+        params_prior = self.configs.get('model_prior_params', dict)
+        model_prior = util_common.get_obj_from_str(self.configs.model_prior_target)(**params_prior)
+        if torch.cuda.device_count() > 1:
+            print(f"Using {torch.cuda.device_count()} GPUs!")
+            # Wrap the model with DataParallel
+            model = nn.DataParallel(model)
+        if self.num_gpus >1:
+            model_prior = nn.DataParallel(model_prior)
+        self.model_prior = model_prior.to('cuda')
+        if hasattr(self.configs, 'model_prior_ckpt') and self.configs.model_prior_ckpt is not None:
+            ckpt_path = self.configs.model_prior
+            if self.rank == 0:
+                self.logger.info(f"Initializing model from {ckpt_path}")
+            ckpt = torch.load(ckpt_path, map_location=f"cuda:{self.rank}")
+            if 'state_dict' in ckpt:
+                ckpt = ckpt['state_dict']
+            util_net.reload_model(self.model_prior, ckpt)
+        self.model_prior.eval()
 
     def training_step(self, data):
         current_batchsize = data['gt'].shape[0]
@@ -802,6 +843,7 @@ class TrainerDiffusion(TrainerBase):
             scaler = amp.GradScaler()
 
         self.optimizer.zero_grad()
+        sigmoid_layer = torch.nn.Sigmoid()
         for jj in range(0, current_batchsize, micro_batchsize):
             micro_data = {key:value[jj:jj+micro_batchsize,] for key, value in data.items()}
             last_batch = (jj+micro_batchsize >= current_batchsize)
@@ -810,6 +852,8 @@ class TrainerDiffusion(TrainerBase):
                     device=f"cuda:{self.rank}",
                     use_fp16=self.configs.train.use_fp16
                     )
+            micro_data['mask'] = sigmoid_layer(self.model_mask(micro_data['lq']))
+            micro_data['prior'] = sigmoid_layer(self.model_prior(micro_data['lq']))
             compute_losses = functools.partial(
                 self.base_diffusion.training_losses,
                 self.model,
@@ -1127,6 +1171,7 @@ class TrainerPredictedMask(TrainerSR):
         loss_mean=0
         loss_avg=0
         print(total_iters, len(self.dataloaders[phase]) )
+        sigmoid_layer = torch.nn.Sigmoid(hq_pred)
         for ii, data in enumerate(self.dataloaders[phase]):
             data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
@@ -1142,6 +1187,7 @@ class TrainerPredictedMask(TrainerSR):
                         total_iters,
                         loss_avg
                         )
+                hq_pred = sigmoid_layer(hq_pred)
                 self.logger.info(log_str)
                 self.logging_image(data['lq'], tag="lq", phase=phase, add_global_step=False)
                 self.logging_image(data['mask'], tag="mask", phase=phase, add_global_step=False)
@@ -1161,20 +1207,10 @@ class TrainerPredictedMask(TrainerSR):
 
 class TrainerPredictedPrior(TrainerSR):
     def get_loss(self, pred, data, weight_known=1, weight_missing=10):
-        if self.configs.train.loss_type == "L1":
-            mask, target = data['mask'], data['prior']
-            per_pixel_loss = F.l1_loss(pred, target, reduction='none')
-            pixel_weights = mask * weight_missing + (1 - mask) * weight_known
-            loss = (pixel_weights * per_pixel_loss).sum() / pixel_weights.sum()
-        elif self.configs.train.loss_type == "L2":
-            mask, target = data['mask'], data['prior']
-            per_pixel_loss = F.mse_loss(pred, target, reduction='none')
-            pixel_weights = mask * weight_missing + (1 - mask) * weight_known
-            loss = (pixel_weights * per_pixel_loss).sum() / pixel_weights.sum()
-        elif self.configs.train.loss_type == "BCE":
+        if self.configs.train.loss_type == "BCE":
             mask, target = data['mask'], data['prior']
             per_pixel_loss = F.binary_cross_entropy_with_logits(pred,target,reduction='none')
-            pixel_weights = mask * weight_missing + (1 - mask) * weight_known
+            pixel_weights = mask *weight_known  + (1 - mask) * weight_missing
             loss = (pixel_weights * per_pixel_loss).sum() / pixel_weights.sum()
         elif self.configs.train.loss_type == "WCE":
             mask, target = data['mask'], data['prior']
@@ -1183,9 +1219,22 @@ class TrainerPredictedPrior(TrainerSR):
             num_positive = torch.sum(data['prior']==1).float()
 
             weight = copy.deepcopy(mask)
-            weight[mask == 1] = 1.0 * num_negative / (num_negative+num_positive)
-            weight[mask == 0] = weight_missing * num_positive / (num_negative+num_positive)
+            weight[(mask == 1) & (target==1)] = 1.0 * num_negative / (num_negative+num_positive)
+            weight[(mask == 1) & (target==0)] = 1.0 * 1.1 * num_positive / (num_negative+num_positive)
+            weight[(mask == 0) & (target==1)] = weight_missing *  num_negative / (num_negative+num_positive)
+            weight[(mask == 0) & (target==0)] = weight_missing * 1.1 * num_positive / (num_negative+num_positive)
             loss = F.binary_cross_entropy_with_logits(pred,target,weight=weight)
+        else:
+            raise ValueError(f"Not supported loss type: {self.configs.train.loss_type}")
+
+        return loss
+    
+    def get_loss_val(self, pred, type_loss, data, weight_known=1, weight_missing=10):
+        if type_loss == "BCE":
+            mask, target = data['mask'], data['prior']
+            per_pixel_loss = F.binary_cross_entropy_with_logits(pred,target,reduction='none')
+            pixel_weights = mask *weight_known  + (1 - mask) * weight_missing
+            loss = (pixel_weights * per_pixel_loss).sum() / pixel_weights.sum()
         else:
             raise ValueError(f"Not supported loss type: {self.configs.train.loss_type}")
 
@@ -1281,10 +1330,11 @@ class TrainerPredictedPrior(TrainerSR):
         loss_mean=0
         loss_avg=0
         print(total_iters, len(self.dataloaders[phase]) )
+        sigmoid_layer=  torch.nn.Sigmoid()
         for ii, data in enumerate(self.dataloaders[phase]):
             data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
-            loss = self.get_loss(hq_pred, data)
+            loss = self.get_loss_val(hq_pred, "BCE",data)
             loss_mean += loss.item()
             loss_avg += loss.item()
 
@@ -1296,6 +1346,7 @@ class TrainerPredictedPrior(TrainerSR):
                         total_iters,
                         loss_avg
                         )
+                hq_pred = sigmoid_layer(hq_pred)
                 self.logger.info(log_str)
                 self.logging_image(data['lq'], tag="lq", phase=phase, add_global_step=False)
                 self.logging_image(data['prior'], tag="prior", phase=phase, add_global_step=False)

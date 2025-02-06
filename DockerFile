@@ -1,0 +1,45 @@
+# Use the same CUDA 12.4.0 devel image
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update and install required system packages, including Python 3.11
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg \
+        libsm6 \
+        libxext6 \
+        libgl1 \
+        python3.11 \
+        python3.11-distutils \
+        python3.11-dev \
+        python3-pip && \
+    rm -rf /var/lib/apt/lists/*
+
+# Make Python 3.11 the default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Install the required Python packages
+RUN pip install \
+    einops \
+    tensorboard \
+    opencv-python \
+    timm \
+    wandb \
+    omegaconf \
+    lpips \
+    loguru \
+    scikit-learn \
+    scikit-image
+
+RUN git clone https://github.com/hoaitrungchar/DifFace_Thesis.git
+
+# You can define a default working directory
+WORKDIR /root
+
+# (Optional) define default entrypoint or command
+CMD ["/bin/bash"]
