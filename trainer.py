@@ -168,7 +168,10 @@ class TrainerBase:
                     ema_state[key] = deepcopy(ckpt['module.'+key].detach().data)
                 else:
                     ema_state[key] = deepcopy(ckpt[key].detach().data)
-
+        if self.configs.pretrained:
+            assert os.path.isfile(self.configs.pretrained)
+            ckpt = torch.load(ckpt_path, map_location=f"cuda:{self.rank}")
+            util_net.reload_model(self.model,)
         if self.configs.resume:
             if type(self.configs.resume) == bool:
                 ckpt_index = max([int(x.stem.split('_')[1]) for x in Path(self.ckpt_dir).glob('*.pth')])

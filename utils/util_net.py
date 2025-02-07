@@ -93,4 +93,4 @@ def reload_model(model, ckpt):
             ckpt = OrderedDict({key[7:]:value for key, value in ckpt.items()})
         else:
             ckpt = ckpt
-    model.load_state_dict(ckpt)
+    print(model.load_state_dict(ckpt,strict =False))
