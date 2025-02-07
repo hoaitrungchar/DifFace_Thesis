@@ -852,16 +852,16 @@ class TrainerDiffusion(TrainerBase):
                     device=f"cuda:{self.rank}",
                     use_fp16=self.configs.train.use_fp16
                     )
-            micro_data['mask'] = sigmoid_layer(self.model_mask(micro_data['lq']))
-            micro_data['prior'] = sigmoid_layer(self.model_prior(micro_data['lq']))
+            inital_mask= sigmoid_layer(self.model_mask(micro_data['lq']))
+            inital_prior= sigmoid_layer(self.model_prior(micro_data['lq']))
             compute_losses = functools.partial(
                 self.base_diffusion.training_losses,
                 self.model,
                 micro_data['lq'],
                 tt,
                 model_kwargs={
-                    'mask': micro_data['mask'],
-                    'prior': micro_data['prior']
+                    'mask': inital_mask,
+                    'prior': inital_prior
                 },
             )
             if self.configs.train.use_fp16:
@@ -998,11 +998,16 @@ class TrainerDiffusion(TrainerBase):
         shape = (batch_size, chn,) + (self.configs.data.train.params.out_size,) * 2
         num_iters = 0
         total_iters = math.ceil(len(self.datasets[phase])/ self.configs.train.batch[1])
+        sigmoid_layer = torch.nn.Sigmoid()
         for ii, data in enumerate(self.dataloaders[phase]):
             yt = self.base_diffusion.q_sample( 
                 x_start=util_image.normalize_th(data['lq'], mean=0.5, std=0.5, reverse=False),
                 t=torch.tensor([self.base_diffusion.num_timesteps,]*data['lq'].shape[0], device=f"cuda:{self.rank}")
             )
+            
+            initial_mask = sigmoid_layer(self.model_mask(data['lq']))
+            initial_prior = sigmoid_layer(self.model_prior(data['lq']))
+
             diffusion_progress = self.base_diffusion.p_sample_loop_progressive(
                 model = self.ema_model,
                 shape = yt.shape,
@@ -1012,8 +1017,8 @@ class TrainerDiffusion(TrainerBase):
                 denoised_fn=None,
                 progress = False,
                 model_kwargs={
-                    'mask': data['mask'],
-                    'prior': data['prior']
+                    'mask': initial_mask,
+                    'prior': initial_prior
                 }
             )
             psnr_mean = 0
