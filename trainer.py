@@ -169,9 +169,10 @@ class TrainerBase:
                 else:
                     ema_state[key] = deepcopy(ckpt[key].detach().data)
         if self.configs.pretrained:
+            ckpt_path = self.configs.pretrained
             assert os.path.isfile(self.configs.pretrained)
             ckpt = torch.load(ckpt_path, map_location=f"cuda:{self.rank}")
-            util_net.reload_model(self.model,)
+            util_net.reload_model(self.model,ckpt)
         if self.configs.resume:
             if type(self.configs.resume) == bool:
                 ckpt_index = max([int(x.stem.split('_')[1]) for x in Path(self.ckpt_dir).glob('*.pth')])
@@ -1179,14 +1180,14 @@ class TrainerPredictedMask(TrainerSR):
         loss_mean=0
         loss_avg=0
         print(total_iters, len(self.dataloaders[phase]) )
-        sigmoid_layer = torch.nn.Sigmoid(hq_pred)
+        sigmoid_layer = torch.nn.Sigmoid()
         for ii, data in enumerate(self.dataloaders[phase]):
             data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
             loss = self.get_loss(hq_pred, data)
             loss_mean += loss.item()
             loss_avg += loss.item()
-
+            hq_pred = sigmoid_layer(hq_pred)
             if (ii+1) % self.configs.train.log_freq[2] == 0:
                 loss_avg/=self.configs.train.log_freq[2]
                 log_str = '{:s}:{:03d}/{:03d}, loss={:5.8f}'.format(
@@ -1343,6 +1344,7 @@ class TrainerPredictedPrior(TrainerSR):
             data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
             loss = self.get_loss_val(hq_pred, "BCE",data)
+            
             loss_mean += loss.item()
             loss_avg += loss.item()
 

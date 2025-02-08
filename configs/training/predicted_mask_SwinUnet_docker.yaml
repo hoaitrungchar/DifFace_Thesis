@@ -100,5 +100,5 @@ train:
 
 project_name: Thesis_blind_image_inpainting
 group_name: FFHQ_mask
-name: batch_64||constant_lr||lr_start_1e-3_end_1e-5||no_aug_mask||kernel_gaussian_size_3
+name: batch_64||cosine_lr||lr_start_1e-3_end_1e-5||no_aug_mask||kernel_gaussian_size_3
 wandb_id: null
