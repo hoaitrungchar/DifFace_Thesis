@@ -15,6 +15,7 @@ def get_parser(**parser_kwargs):
     parser.add_argument("--cfg_path", type=str, default="./configs/inpainting_debug.yaml",
                                                                         help="Configs of yaml file")
     parser.add_argument("--seed", type=int, default=10000, help="Random seed")
+    parser.add_argument("--pretrained",  default=None, help="Random seed")
     args = parser.parse_args()
 
     return args
