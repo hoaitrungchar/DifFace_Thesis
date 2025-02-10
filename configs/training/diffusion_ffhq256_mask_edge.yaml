@@ -2,12 +2,13 @@ trainer:
   target: trainer.TrainerDiffusion
 
 model:
-  target: models.unet.UNetModel
+  target: models.unet.UNetModelMaskPrior
   params:
     image_size: 256
-    in_channels: 3
+    in_channels: 5
     model_channels: 32
     out_channels: 6
+    out_channels_prior: 1
     attention_resolutions: [32, 16, 8]
     dropout: 0
     channel_mult: [1, 2, 4, 8, 8, 16, 16]
