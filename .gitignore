@@ -2,3 +2,5 @@ train_remote_wandb.py
 ckpts
 resume_ckpt
 train_remote_wandb_notorchrun.py
+rundockercommand.sh
+pretrained_checkpoint

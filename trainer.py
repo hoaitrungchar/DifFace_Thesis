@@ -806,10 +806,10 @@ class TrainerDiffusion(TrainerBase):
 
     def load_initial_model(self):
         params_mask = self.configs.get('model_mask_params', dict)
-        model_mask = util_common.get_obj_from_str(self.configs.model_mask_target)(**params_mask)
+        self.model_mask = util_common.get_obj_from_str(self.configs.model_mask_target)(**params_mask)
         if self.num_gpus >1:
             model_mask = nn.DataParallel(model_mask)
-        self.model_mask = model_mask.to('cuda')
+        self.model_mask = self.model_mask.to('cuda')
         if hasattr(self.configs, 'model_prior_ckpt') and self.configs.model_mask_ckpt is not None:
             ckpt_path = self.configs.model_mask_ckpt
             if self.rank == 0:
@@ -819,17 +819,18 @@ class TrainerDiffusion(TrainerBase):
                 ckpt = ckpt['state_dict']
             util_net.reload_model(self.model_mask, ckpt)
         self.model_mask.eval()
+        self.freeze_model(self.model_mask)
 
 
         params_prior = self.configs.get('model_prior_params', dict)
-        model_prior = util_common.get_obj_from_str(self.configs.model_prior_target)(**params_prior)
+        self.model_prior = util_common.get_obj_from_str(self.configs.model_prior_target)(**params_prior)
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs!")
             # Wrap the model with DataParallel
             model = nn.DataParallel(model)
         if self.num_gpus >1:
             model_prior = nn.DataParallel(model_prior)
-        self.model_prior = model_prior.to('cuda')
+        self.model_prior = self.model_prior.to('cuda')
         if hasattr(self.configs, 'model_prior_ckpt') and self.configs.model_prior_ckpt is not None:
             ckpt_path = self.configs.model_prior_ckpt
             if self.rank == 0:
@@ -839,6 +840,8 @@ class TrainerDiffusion(TrainerBase):
                 ckpt = ckpt['state_dict']
             util_net.reload_model(self.model_prior, ckpt)
         self.model_prior.eval()
+        self.freeze_model(self.model_prior)
+
 
     def training_step(self, data):
         current_batchsize = data['gt'].shape[0]
@@ -985,6 +988,7 @@ class TrainerDiffusion(TrainerBase):
     def validation(self, phase='val'):
         self.reload_ema_model()
         self.ema_model.eval()
+        self.freeze_model(self.ema_model)
 
         indices = [int(self.base_diffusion.num_timesteps * x) for x in [0.25, 0.5, 0.75, 1]]
         chn = 3
@@ -1019,6 +1023,7 @@ class TrainerDiffusion(TrainerBase):
             psnr_mean = 0
             lpips_mean = 0
             ssim_mean = 0
+            print(type(diffusion_progress))
             for sample in diffusion_progress:
                 num_iters += 1
                 img = util_image.normalize_th(sample['sample'], reverse=True)
