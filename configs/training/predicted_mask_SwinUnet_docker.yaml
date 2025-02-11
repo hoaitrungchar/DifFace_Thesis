@@ -89,13 +89,13 @@ train:
   microbatch: 64
   num_workers: 24
   prefetch_factor: 2
-  iterations: 258000
+  iterations: 430000
   weight_decay: 0
   save_freq: 860
   val_freq: ${train.save_freq}
   log_freq: [860, 8600, 20]
   loss_type: BCE
-  tf_logging: True
+  tf_logging: False
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting

@@ -5,7 +5,7 @@ docker run \
     --mount type=bind,source=/media/ml4u/Samsung_T5/source/Trung/DifFace_Thesis,target=/root/source \
     --mount type=bind,source=/media/ml4u/Samsung_T5/source/Trung/test_mask,target=/root/data/Mask \
     --mount type=bind,source=/media/ml4u/Samsung_T5/source/Trung/log,target=/root/log \
-    --gpus all -it --privileged --shm-size=24GB  hoaitrung/blind_inpainting
+    --gpus all -d -it --privileged --shm-size=28GB    hoaitrung/blind_inpainting
 
 
 # export CUDA_VISIBLE_DEVICES="1"

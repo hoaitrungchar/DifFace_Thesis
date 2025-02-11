@@ -85,17 +85,17 @@ data:
 train:
   lr: 1e-4
   lr_min: 1e-6
-  batch: [64, 64]   # batchsize for training and validation
-  microbatch: 64
+  batch: [32, 32]   # batchsize for training and validation
+  microbatch: 32
   num_workers: 24
   prefetch_factor: 2
-  iterations: 86000
+  iterations: 859500
   weight_decay: 0
-  save_freq: 860
+  save_freq: 1719
   val_freq: ${train.save_freq}
-  log_freq: [860, 8600, 20]
+  log_freq: [1719, 17190, 50]
   loss_type: BCE
-  tf_logging: True
+  tf_logging: False
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting

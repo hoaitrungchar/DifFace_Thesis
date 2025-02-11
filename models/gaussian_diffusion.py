@@ -208,10 +208,15 @@ class GaussianDiffusion:
         if noise is None:
             noise = th.randn_like(x_start)
         assert noise.shape == x_start.shape
+        # print(x_start.get_device(), noise.get_device())
+        tensor1 = _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape)
+        tensor2 =  _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
+        x_start = x_start.to(device=tensor1.device)
+        noise = noise.to(device=tensor2.device)
+        # print(x_start.get_device(), noise.get_device(), tensor1.get_device(), tensor2.get_device())
         return (
-            _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-            + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
-            * noise
+            tensor1* x_start
+            +      tensor2       * noise
         )
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
@@ -283,8 +288,14 @@ class GaussianDiffusion:
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
-        model_output, mask, prior = model(x, self._scale_timesteps(t), **model_kwargs)
-
+        # model_output, mask, prior = model(x, self._scale_timesteps(t), **model_kwargs)
+        flag =0
+        model_output = model(x, self._scale_timesteps(t), **model_kwargs)
+        if isinstance(model_output,tuple):
+            flag = 1
+            mask  = model_output[1]
+            prior = model_output[2] 
+            model_output = model_output[0]
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
             assert model_output.shape == (B, C * 2, *x.shape[2:])
             model_output, model_var_values = th.split(model_output, C, dim=1)
@@ -365,11 +376,19 @@ class GaussianDiffusion:
         assert (
             model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
         )
-        return {
+        if flag == 1:
+            return {
             "mean": model_mean,
             "variance": model_variance,
             'mask': mask,
             'prior':prior,
+            "log_variance": model_log_variance,
+            "pred_xstart": pred_xstart,
+            "pred_noise": pred_noise,
+            }
+        return {
+            "mean": model_mean,
+            "variance": model_variance,
             "log_variance": model_log_variance,
             "pred_xstart": pred_xstart,
             "pred_noise": pred_noise,
@@ -646,7 +665,7 @@ class GaussianDiffusion:
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
         output = th.where((t == 0), decoder_nll, kl)
-        return {"output": output, "pred_xstart": out["pred_xstart"], 'mask': out['mask'],'prior': out['prior']}
+        return {"output": output, "pred_xstart": out["pred_xstart"]}
 
     def training_losses(self, model, x_start, t, model_kwargs=None, noise=None):
         """
@@ -681,8 +700,6 @@ class GaussianDiffusion:
             terms['loss'] = output['output']
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
-            terms["mask"] = output['mask']
-            terms["prior"] = output['prior']
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
             model_output, mask, prior = model(x_t, self._scale_timesteps(t), **model_kwargs)
 

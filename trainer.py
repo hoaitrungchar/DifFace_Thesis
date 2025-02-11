@@ -71,6 +71,8 @@ class TrainerBase:
 
         # resume
         self.resume_from_ckpt()
+        self.epoch = 0 
+
 
     def setup_dist(self):
         num_gpus = torch.cuda.device_count()
@@ -760,13 +762,13 @@ class TrainerDiffusionFace(TrainerBase):
                 self.logger.info("="*130)
 
     def validation(self, phase='val'):
-        self.reload_ema_model(self.ema_rates[0])
+        self.reload_ema_model()
         self.ema_model.eval()
 
         indices = [int(self.base_diffusion.num_timesteps * x) for x in [0.25, 0.5, 0.75, 1]]
         chn = 3
         batch_size = self.configs.train.batch[1]
-        shape = (batch_size, chn,) + (self.configs.data.train.params.out_size,) * 2
+        shape = (batch_size, chn,) + (self.configs.data.train.params.img_size,) * 2
         num_iters = 0
         for sample in self.base_diffusion.p_sample_loop_progressive(
                 model = self.ema_model,
@@ -829,7 +831,7 @@ class TrainerDiffusion(TrainerBase):
             model_prior = nn.DataParallel(model_prior)
         self.model_prior = model_prior.to('cuda')
         if hasattr(self.configs, 'model_prior_ckpt') and self.configs.model_prior_ckpt is not None:
-            ckpt_path = self.configs.model_prior
+            ckpt_path = self.configs.model_prior_ckpt
             if self.rank == 0:
                 self.logger.info(f"Initializing model from {ckpt_path}")
             ckpt = torch.load(ckpt_path, map_location=f"cuda:{self.rank}")
@@ -880,11 +882,11 @@ class TrainerDiffusion(TrainerBase):
                 bce_loss = torch.nn.functional.binary_cross_entropy_with_logits
                 mse_loss = torch.nn.functional.mse_loss
                 loss_mask = bce_loss(losses['mask'],micro_data['mask'])
-                if self.configs.train.prior=='edege':
+                if self.configs.train.prior=='edge':
                     loss_prior = bce_loss(losses['prior'],micro_data['prior'])
                 elif self.configs.train.prior in ['segmentation','gradient']:
                     loss_prior = mse_loss(losses['prior'],micro_data['prior'])
-                total_loss = loss + self.config.train.lambda_loss_mask*loss_mask + self.config.train.lambda_loss_prior*loss_prior
+                total_loss = losses['loss'] + self.configs.train.lambda_loss_mask*loss_mask + self.configs.train.lambda_loss_prior*loss_prior
                 losses['mask_loss'] = loss_mask
                 losses['prior_loss'] = loss_prior
                 losses['total_loss'] = total_loss
@@ -901,11 +903,12 @@ class TrainerDiffusion(TrainerBase):
                 bce_loss = torch.nn.functional.binary_cross_entropy_with_logits
                 mse_loss = torch.nn.functional.mse_loss
                 loss_mask = bce_loss(losses['mask'],micro_data['mask'])
-                if self.configs.train.prior=='edege':
+
+                if self.configs.train.prior=='edge':
                     loss_prior = bce_loss(losses['prior'],micro_data['prior'])
                 elif self.configs.train.prior in ['segmentation','gradient']:
                     loss_prior = mse_loss(losses['prior'],micro_data['prior'])
-                total_loss = loss + self.config.train.lambda_loss_mask*loss_mask + self.config.train.lambda_loss_prior*loss_prior
+                total_loss = losses['loss']  + self.configs.train.lambda_loss_mask*loss_mask + self.configs.train.lambda_loss_prior*loss_prior
                 losses['mask_loss'] = loss_mask
                 losses['prior_loss'] = loss_prior
                 losses['total_loss'] = total_loss
@@ -943,44 +946,31 @@ class TrainerDiffusion(TrainerBase):
             num_timesteps = self.base_diffusion.num_timesteps
             record_steps = [1, (num_timesteps // 2) + 1, num_timesteps]
             if self.current_iters % self.configs.train.log_freq[0] == 1:
-                self.loss_mean = {key:torch.zeros(size=(len(record_steps),), dtype=torch.float64)
-                                  for key in loss.keys()}
-                self.loss_count = torch.zeros(size=(len(record_steps),), dtype=torch.float64)
-            for jj in range(len(record_steps)):
-                for key, value in loss.items():
-                    index = record_steps[jj] - 1
-                    mask = torch.where(tt == index, torch.ones_like(tt), torch.zeros_like(tt))
-                    current_loss = torch.sum(value.detach() * mask)
-                    self.loss_mean[key][jj] += current_loss.item()
-                self.loss_count[jj] += mask.sum().item()
+                self.loss_mean = {key: 0 for key in loss.keys()}
+            
+
+            for key in ['mask_loss', 'prior_loss', 'total_loss']:
+                print(key,loss[key])
+                if key in ['mask_loss', 'prior_loss']:
+                    self.loss_mean[key] += loss[key].item()
+                else:
+                    self.loss_mean[key] += torch.mean(loss[key])
 
             if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
-                if torch.any(self.loss_count == 0):
-                    self.loss_count += 1e-4
                 for key in loss.keys():
-                    self.loss_mean[key] /= self.loss_count
+                    self.loss_mean[key] /= self.configs.train.log_freq[0] 
                 log_str = 'Train: {:06d}/{:06d}, Loss: '.format(
                         self.current_iters,
                         self.configs.train.iterations)
-                for jj, current_record in enumerate(record_steps):
-                    if 'vb' in self.loss_mean:
-                        log_str += 't({:d}):{:.4e}/{:.4e}/{:.4e}/{:.4e}/{:.4e}, '.format(
-                                current_record,
-                                self.loss_mean['total_loss'][jj].item(),
-                                self.loss_mean['mse'][jj].item(),
-                                self.loss_mean['vb'][jj].item(),
-                                self.loss_mean['prior_loss'][jj].item(),
-                                self.loss_mean['mask_loss'][jj].item()
-                                )
-                    else:
-                        log_str += 't({:d}):{:.4e}/{:.4e}/{:.4e}, '.format(
-                                current_record,
-                                self.loss_mean['loss'][jj].item(),
-                                self.loss_mean['prior_loss'][jj].item(),
-                                self.loss_mean['mask_loss'][jj].item()
+               
+                log_str += '{:.4e}/{:.4e}/{:.4e}, '.format(
+                                self.loss_mean['total_loss'],
+                                self.loss_mean['prior_loss'],
+                                self.loss_mean['mask_loss']
                                 )
                 log_str += 'lr:{:.2e}'.format(self.optimizer.param_groups[0]['lr'])
                 self.logger.info(log_str)
+                wandb.log({"loss_mask":  self.loss_mean['mask_loss'], "loss_prior": self.loss_mean['prior_loss'], 'total_loss': self.loss_mean['total_loss'],  'epoch': self.epoch})
             if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
                 self.logging_image(batch['gt'], tag='image', phase=phase, add_global_step=True)
 
@@ -993,26 +983,27 @@ class TrainerDiffusion(TrainerBase):
                 self.logger.info("="*130)
 
     def validation(self, phase='val'):
-        self.reload_ema_model(self.ema_rates[0])
+        self.reload_ema_model()
         self.ema_model.eval()
 
         indices = [int(self.base_diffusion.num_timesteps * x) for x in [0.25, 0.5, 0.75, 1]]
         chn = 3
         batch_size = self.configs.train.batch[1]
-        shape = (batch_size, chn,) + (self.configs.data.train.params.out_size,) * 2
+        shape = (batch_size, chn,) + (self.configs.data.train.params.img_size,) * 2
         num_iters = 0
         total_iters = math.ceil(len(self.datasets[phase])/ self.configs.train.batch[1])
         sigmoid_layer = torch.nn.Sigmoid()
         for ii, data in enumerate(self.dataloaders[phase]):
+            data = self.prepare_data(data)
             yt = self.base_diffusion.q_sample( 
                 x_start=util_image.normalize_th(data['lq'], mean=0.5, std=0.5, reverse=False),
-                t=torch.tensor([self.base_diffusion.num_timesteps,]*data['lq'].shape[0], device=f"cuda:{self.rank}")
+                t=torch.tensor([self.base_diffusion.num_timesteps-1,]*data['lq'].shape[0], device=f"cuda:{self.rank}")
             )
             
             initial_mask = sigmoid_layer(self.model_mask(data['lq']))
             initial_prior = sigmoid_layer(self.model_prior(data['lq']))
 
-            diffusion_progress = self.base_diffusion.p_sample_loop_progressive(
+            diffusion_progress = self.base_diffusion.p_sample_loop(
                 model = self.ema_model,
                 shape = yt.shape,
                 noise = yt,
@@ -1099,8 +1090,10 @@ class TrainerDiffusion(TrainerBase):
                 add_global_step=True,
                 )
         # logging
+        wandb.log({"PSNR": psnr_mean, "lpips": lpips_mean, 'SSIM': ssim_mean, 'epoch': self.epoch})
         self.logger.info(f'PSNR={psnr_mean:6.3f}, SSIM={ssim_mean:6.3f}, LPIPS={lpips_mean:7.5f}')
         self.logger.info("="*60)
+        self.epoch +=1
 
 def my_worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
@@ -1155,7 +1148,7 @@ class TrainerPredictedMask(TrainerSR):
                         self.L2_gradient
                         )
                 self.logger.info(log_str)
-                wandb.log({"train/loss": self.loss_mean, 'train/learning_rate': self.optimizer.param_groups[0]['lr'], 'train/gradient': self.L2_gradient })
+                wandb.log({"train/loss": self.loss_mean, 'train/learning_rate': self.optimizer.param_groups[0]['lr'], 'train/gradient': self.L2_gradient, "epoch": self.epoch })
                 self.logging_metric(self.loss_mean, 'Loss', phase, add_global_step=True)
             if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
                 self.logging_image(batch['lq'], tag="lq", phase=phase, add_global_step=False)
@@ -1209,10 +1202,11 @@ class TrainerPredictedMask(TrainerSR):
                 phase=phase,
                 add_global_step=True,
                 )
-        wandb.log({"val/loss": loss_mean})
+        wandb.log({"val/loss": loss_mean, "epoch": self.epoch})
         self.logger.info(f'loss={loss_mean:5.8f}')
         if not hasattr(self.configs.train, 'ema_rate'):
             self.model.train()
+        self.epoch +=1
 
 class TrainerPredictedPrior(TrainerSR):
     def get_loss(self, pred, data, weight_known=1, weight_missing=10):
@@ -1312,7 +1306,7 @@ class TrainerPredictedPrior(TrainerSR):
                         self.L2_gradient
                         )
                 self.logger.info(log_str)
-                wandb.log({"train/loss": self.loss_mean, 'train/learning_rate': self.optimizer.param_groups[0]['lr'], 'train/gradient': self.L2_gradient })
+                wandb.log({"train/loss": self.loss_mean, 'train/learning_rate': self.optimizer.param_groups[0]['lr'], 'train/gradient': self.L2_gradient, "epoch": self.epoch})
                 self.logging_metric(self.loss_mean, 'Loss', phase, add_global_step=True)
             if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
                 self.logging_image(batch['lq'], tag="lq", phase=phase, add_global_step=False)
@@ -1341,7 +1335,7 @@ class TrainerPredictedPrior(TrainerSR):
         print(total_iters, len(self.dataloaders[phase]) )
         sigmoid_layer=  torch.nn.Sigmoid()
         for ii, data in enumerate(self.dataloaders[phase]):
-            data = self.prepare_data(data, phase='val')
+            
             hq_pred = self.feed_data(data, phase='val')
             loss = self.get_loss_val(hq_pred, "BCE",data)
             
@@ -1369,10 +1363,11 @@ class TrainerPredictedPrior(TrainerSR):
                 phase=phase,
                 add_global_step=True,
                 )
-        wandb.log({"val/loss": loss_mean})
+        wandb.log({"val/loss": loss_mean, "epoch": self.epoch})
         self.logger.info(f'loss={loss_mean:5.8f}')
         if not hasattr(self.configs.train, 'ema_rate'):
             self.model.train()
+        self.epoch +=1
 
 if __name__ == '__main__':
     from utils import util_image
