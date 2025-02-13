@@ -560,7 +560,7 @@ class GaussianDiffusion:
             cond_kwargs=cond_kwargs,
         ):
             final = sample
-        return final["sample"]
+        return final
 
     def p_sample_loop_progressive(
         self,

@@ -139,16 +139,19 @@ model_prior_params:
 train:
   lr: 1e-5
   lr_min: 1e-6
+  # batch: [16, 16]   # batchsize for training and validation
+  # microbatch: 16
   batch: [1, 1]   # batchsize for training and validation
   microbatch: 1
   num_workers: 16
   prefetch_factor: 2
-  iterations: 100000
+  iterations: 3438000
   weight_decay: 0
-  save_freq: 2
+  save_freq: 1719
   val_freq: ${train.save_freq}
   milestones: [10000, 800000]
-  log_freq: [2, 3, 5]
+  # log_freq: [3438, 3438, 50]
+  log_freq: [1,2,5]
   tf_logging: False
   local_logging: True
   use_fp16: True
@@ -160,6 +163,6 @@ train:
 
 project_name: Thesis_blind_image_inpainting
 group_name: FFHQ_Diffusion_edgeCanny
-# name: batch_16||linear_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3||alpha1_0.5||alpha2_0.5
-name: test
+name: batch_16||linear_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3||alpha1_0.5||alpha2_0.5
+# name: test
 wandb_id: null
