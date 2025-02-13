@@ -1084,7 +1084,7 @@ class TrainerDiffusion(TrainerBase):
                 self.logging_image(mask_recover.float(),tag="pred_mask",phase=phase, add_global_step=False)
 
                 self.logging_image( initial_mask,tag="initial_mask",phase=phase, add_global_step=False)
-                self.logging_image( initial_prior,tag="initial_mask",phase=phase, add_global_step=False)
+                self.logging_image( initial_prior,tag="initial_prior",phase=phase, add_global_step=False)
             num_iters=ii+1
         psnr_mean /= num_iters
         lpips_mean /= num_iters
