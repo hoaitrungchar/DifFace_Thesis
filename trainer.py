@@ -20,7 +20,7 @@ from collections import OrderedDict
 from einops import rearrange
 import wandb
 from torchmetrics.image import PeakSignalNoiseRatio
-from torchmetrics.image import StructuralSimilarity
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 import torch
 import torch.nn as nn
@@ -805,8 +805,8 @@ class TrainerDiffusion(TrainerBase):
         lpips_loss = lpips.LPIPS(net='alex').cuda()
         self.freeze_model(lpips_loss)
         self.lpips_loss = lpips_loss.eval()
-        self.psnr = PeakSignalToRaito()
-        self.ssim = StructuralSimilarity()
+        self.cal_psnr = PeakSignalNoiseRatio()
+        self.cal_ssim = StructuralSimilarityIndexMeasure()
 
 
     def load_initial_model(self):
@@ -1055,8 +1055,10 @@ class TrainerDiffusion(TrainerBase):
             prior_recover = final_sample['prior']
             hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*final_sample['sample'] 
             lpips = self.lpips_loss((hq_pred-0.5)*2, (data['gt']-0.5)*2).sum().item()
-            psnr  = self.psnr(hq_pred, data['gt'])
-            ssim  = self.ssim(hq_pred, data['gt'])
+            self.cal_psnr = self.cal_psnr.to(data['gt'].get_device())
+            self.cal_ssim = self.cal_ssim.to(data['gt'].get_device())
+            psnr  = self.cal_psnr(hq_pred, data['gt'])
+            ssim  = self.cal_ssim(hq_pred, data['gt'])
             # psnr = util_image.batch_PSNR(hq_pred, data['gt'], ycbcr=True)
             # ssim = util_image.batch_SSIM(hq_pred, data['gt'], ycbcr=True)
             psnr_mean += psnr
@@ -1067,9 +1069,9 @@ class TrainerDiffusion(TrainerBase):
                         phase,
                         ii+1,
                         total_iters,
-                        psnr / hq_pred.shape[0],
-                        lpips / hq_pred.shape[0],
-                        ssim /hq_pred.shape[0]
+                        psnr,
+                        ssim,
+                        lpips
                         )
                 self.logger.info(log_str)
                 self.logging_image(data['gt'], tag="hq", phase=phase, add_global_step=False)
@@ -1079,11 +1081,16 @@ class TrainerDiffusion(TrainerBase):
                 self.logging_image(mask_recover.float(),tag="pred_mask",phase=phase, add_global_step=False)
 
                 self.logging_image( prior_recover,tag="pred_prior",phase=phase, add_global_step=False)
-        psnr_mean /= len(self.datasets[phase])
-        lpips_mean /= len(self.datasets[phase])
-        ssim_mean /= len(self.datasets[phase])
+                self.logging_image(mask_recover.float(),tag="pred_mask",phase=phase, add_global_step=False)
+
+                self.logging_image( initial_mask,tag="initial_mask",phase=phase, add_global_step=False)
+                self.logging_image( initial_prior,tag="initial_mask",phase=phase, add_global_step=False)
+            num_iters=ii+1
+        psnr_mean /= num_iters
+        lpips_mean /= num_iters
+        ssim_mean /= num_iters
         self.logging_metric(
-                {"PSRN": psnr_mean, "lpips": lpips_mean},
+                {"PSRN": psnr_mean, "SSIM": ssim_mean, "lpips": lpips_mean},
                 tag='Metrics',
                 phase=phase,
                 add_global_step=True,
