@@ -19,8 +19,8 @@ from omegaconf import OmegaConf
 from collections import OrderedDict
 from einops import rearrange
 import wandb
-
-
+from torchmetrics.image import PeakSignalNoiseRatio
+from torchmetrics.image import StructuralSimilarity
 
 import torch
 import torch.nn as nn
@@ -802,6 +802,11 @@ class TrainerDiffusion(TrainerBase):
         self.base_diffusion = util_common.get_obj_from_str(self.configs.diffusion.target)(**params)
         self.sample_scheduler_diffusion = UniformSampler(self.base_diffusion.num_timesteps)
         self.load_initial_model()
+        lpips_loss = lpips.LPIPS(net='alex').cuda()
+        self.freeze_model(lpips_loss)
+        self.lpips_loss = lpips_loss.eval()
+        self.psnr = PeakSignalToRaito()
+        self.ssim = StructuralSimilarity()
 
 
     def load_initial_model(self):
@@ -953,7 +958,6 @@ class TrainerDiffusion(TrainerBase):
             
 
             for key in ['mask_loss', 'prior_loss', 'total_loss']:
-                print(key,loss[key])
                 if key in ['mask_loss', 'prior_loss']:
                     self.loss_mean[key] += loss[key].item()
                 else:
@@ -1007,7 +1011,7 @@ class TrainerDiffusion(TrainerBase):
             initial_mask = sigmoid_layer(self.model_mask(data['lq']))
             initial_prior = sigmoid_layer(self.model_prior(data['lq']))
 
-            diffusion_progress = self.base_diffusion.p_sample_loop(
+            final_sample = self.base_diffusion.p_sample_loop(
                 model = self.ema_model,
                 shape = yt.shape,
                 noise = yt,
@@ -1023,32 +1027,38 @@ class TrainerDiffusion(TrainerBase):
             psnr_mean = 0
             lpips_mean = 0
             ssim_mean = 0
-            print(type(diffusion_progress))
-            for sample in diffusion_progress:
-                num_iters += 1
-                img = util_image.normalize_th(sample['sample'], reverse=True)
-                prior = util_image.normalize_th(sample['prior'], reverse=True)
-                mask = util_image.normalize_th(sample['mask'], reverse=True)
-                if num_iters == 1:
-                    im_recover = img
-                    prior_recover = prior
-                    mask_recover = mask
-                elif num_iters in indices:
-                    im_recover_last = img
-                    im_recover = torch.cat((im_recover, im_recover_last), dim=1)
-                    prior_recover_last = prior
-                    prior_recover = torch.cat((prior_recover, prior_recover_last), dim=1)
-                    mask_recover_last = mask
-                    mask_recover = torch.cat((mask_recover, mask_recover_last), dim=1)
-                im_recover = rearrange(im_recover, 'b (k c) h w -> (b k) c h w', c=chn)
-                mask_recover = rearrange(mask_recover, 'b (k c) h w -> (b k) c h w', c=1)
-                prior_recover = rearrange(prior_recover, 'b (k c) h w -> (b k) c h w', c=data['prior'].shape[1])
-            mask_recover_last = torch.where(mask_recover_last>0.5,1,0)
-            mask_reshape = mask_recover_last.expand(batch_size,3, -1, -1)
-            hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*im_recover_last 
+            # for sample in diffusion_progress:
+            #     print(type(sample))
+            #     num_iters += 1
+            #     img = util_image.normalize_th(sample['sample'], reverse=True)
+            #     prior = util_image.normalize_th(sample['prior'], reverse=True)
+            #     mask = util_image.normalize_th(sample['mask'], reverse=True)
+            #     if num_iters == 1:
+            #         im_recover = img
+            #         prior_recover = prior
+            #         mask_recover = mask
+            #     elif num_iters in indices:
+            #         im_recover_last = img
+            #         im_recover = torch.cat((im_recover, im_recover_last), dim=1)
+            #         prior_recover_last = prior
+            #         prior_recover = torch.cat((prior_recover, prior_recover_last), dim=1)
+            #         mask_recover_last = mask
+            #         mask_recover = torch.cat((mask_recover, mask_recover_last), dim=1)
+            #     im_recover = rearrange(im_recover, 'b (k c) h w -> (b k) c h w', c=chn)
+            #     mask_recover = rearrange(mask_recover, 'b (k c) h w -> (b k) c h w', c=1)
+            #     prior_recover = rearrange(prior_recover, 'b (k c) h w -> (b k) c h w', c=data['prior'].shape[1])
+            # mask_recover_last = torch.where(mask_recover_last>0.5,1,0)
+            # mask_reshape = mask_recover_last.expand(batch_size,3, -1, -1)
+            # hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*im_recover_last 
+            mask_recover = torch.where(final_sample['mask']>0.5,1,0)
+            mask_reshape = mask_recover.expand(batch_size,3, -1, -1)
+            prior_recover = final_sample['prior']
+            hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*final_sample['sample'] 
             lpips = self.lpips_loss((hq_pred-0.5)*2, (data['gt']-0.5)*2).sum().item()
-            psnr = util_image.batch_PSNR(hq_pred, data['gt'], ycbcr=True)
-            ssim = util_image.batch_SSIM(hq_pred, data['gt'], ycbcr=True)
+            psnr  = self.psnr(hq_pred, data['gt'])
+            ssim  = self.ssim(hq_pred, data['gt'])
+            # psnr = util_image.batch_PSNR(hq_pred, data['gt'], ycbcr=True)
+            # ssim = util_image.batch_SSIM(hq_pred, data['gt'], ycbcr=True)
             psnr_mean += psnr
             lpips_mean += lpips
             ssim_mean += ssim
@@ -1058,38 +1068,22 @@ class TrainerDiffusion(TrainerBase):
                         ii+1,
                         total_iters,
                         psnr / hq_pred.shape[0],
-                        lpips / hq_pred.shape[0]
+                        lpips / hq_pred.shape[0],
+                        ssim /hq_pred.shape[0]
                         )
                 self.logger.info(log_str)
                 self.logging_image(data['gt'], tag="hq", phase=phase, add_global_step=False)
-                self.logging_image(
-                    im_recover,
-                    tag='progress',
-                    phase=phase,
-                    add_global_step=True,
-                    nrow=len(indices),
-                    )
+                
+                self.logging_image(hq_pred, tag="pred", phase=phase, add_global_step=False)
                         
-                self.logging_image(
-                    mask_recover,
-                    tag='mask progress',
-                    phase=phase,
-                    add_global_step=True,
-                    nrow=len(indices),
-                    )
+                self.logging_image(mask_recover.float(),tag="pred_mask",phase=phase, add_global_step=False)
 
-                self.logging_image(
-                    prior_recover,
-                    tag='prior progress',
-                    phase=phase,
-                    add_global_step=True,
-                    nrow=len(indices),
-                    )
+                self.logging_image( prior_recover,tag="pred_prior",phase=phase, add_global_step=False)
         psnr_mean /= len(self.datasets[phase])
         lpips_mean /= len(self.datasets[phase])
         ssim_mean /= len(self.datasets[phase])
         self.logging_metric(
-                {"PSRN": psnr_mean, "lpips": lpips_mean, 'SSIM': ssim_mean},
+                {"PSRN": psnr_mean, "lpips": lpips_mean},
                 tag='Metrics',
                 phase=phase,
                 add_global_step=True,
@@ -1232,6 +1226,8 @@ class TrainerPredictedPrior(TrainerSR):
             weight[(mask == 0) & (target==1)] = weight_missing *  num_negative / (num_negative+num_positive)
             weight[(mask == 0) & (target==0)] = weight_missing * 1.1 * num_positive / (num_negative+num_positive)
             loss = F.binary_cross_entropy_with_logits(pred,target,weight=weight)
+        # elif self.configs.train.loss_type == "focal":
+            
         else:
             raise ValueError(f"Not supported loss type: {self.configs.train.loss_type}")
 
