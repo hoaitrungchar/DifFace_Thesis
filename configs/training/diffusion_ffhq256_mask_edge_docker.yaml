@@ -141,8 +141,8 @@ train:
   lr_min: 1e-6
   # batch: [16, 16]   # batchsize for training and validation
   # microbatch: 16
-  batch: [16, 16]   # batchsize for training and validation
-  microbatch: 16
+  batch: [1, 1]   # batchsize for training and validation
+  microbatch: 1
   num_workers: 16
   prefetch_factor: 2
   iterations: 3438000
@@ -154,7 +154,7 @@ train:
   log_freq: [1,2,5]
   tf_logging: False
   local_logging: True
-  use_fp16: False
+  use_fp16: True
   prior: edge
   lambda_loss_mask: 0.5
   lambda_loss_prior: 0.5
