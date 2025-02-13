@@ -802,7 +802,7 @@ class TrainerDiffusion(TrainerBase):
         self.base_diffusion = util_common.get_obj_from_str(self.configs.diffusion.target)(**params)
         self.sample_scheduler_diffusion = UniformSampler(self.base_diffusion.num_timesteps)
         self.load_initial_model()
-        lpips_loss = lpips.LPIPS(net='alex').cuda()
+        lpips_loss = lpips.LPIPS(net='vgg').cuda()
         self.freeze_model(lpips_loss)
         self.lpips_loss = lpips_loss.eval()
         self.cal_psnr = PeakSignalNoiseRatio()
