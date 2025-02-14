@@ -1,5 +1,6 @@
 docker run \
     --mount type=bind,source='/home/ml4u/BKTeam/Tr/ImageNet',target=/root/data/ImageNet \
+    --mount type=bind,source='/dev/shm/Places2',target=/root/data/Places2\
     --mount type=bind,source='/media/ml4u/Extreme SSD/datasets/celebA-HQ',target=/root/data/CelebA-HQ\
     --mount type=bind,source='/media/ml4u/Extreme SSD/datasets/FFHQ',target=/root/data/FFHQ \
     --mount type=bind,source='/media/ml4u/Extreme SSD/log/TRUNG/DifFace_Thesis',target=/root/source \
