@@ -921,7 +921,7 @@ class TrainerDiffusion(TrainerBase):
                 losses['prior_loss'] = loss_prior
                 losses['total_loss'] = total_loss
 
-                loss = (losses["loss"] * weights).mean() / num_grad_accumulate
+                loss = ((losses["loss"] * weights).mean() + self.configs.train.lambda_loss_mask*loss_mask + self.configs.train.lambda_loss_prior*loss_prior) / num_grad_accumulate
                 loss.backward()
             
 
@@ -961,7 +961,7 @@ class TrainerDiffusion(TrainerBase):
                 if key in ['mask_loss', 'prior_loss']:
                     self.loss_mean[key] += loss[key].item()
                 else:
-                    self.loss_mean[key] += torch.mean(loss[key])
+                    self.loss_mean[key] += torch.mean(loss[key]).item()
 
             if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
                 for key in loss.keys():
@@ -978,8 +978,11 @@ class TrainerDiffusion(TrainerBase):
                 log_str += 'lr:{:.2e}'.format(self.optimizer.param_groups[0]['lr'])
                 self.logger.info(log_str)
                 wandb.log({"loss_mask":  self.loss_mean['mask_loss'], "loss_prior": self.loss_mean['prior_loss'], 'total_loss': self.loss_mean['total_loss'],  'epoch': self.epoch})
-            if self.current_iters % self.configs.train.log_freq[1] == 0 and flag:
-                self.logging_image(batch['gt'], tag='image', phase=phase, add_global_step=True)
+            if self.current_iters % self.configs.train.log_freq[0] == 0 and flag:
+                self.logging_image(batch['gt'], tag='hq', phase=phase, add_global_step=True)
+                self.logging_image(batch['lq'], tag='lq', phase=phase, add_global_step=True)
+                self.logging_image(batch['mask'], tag='mask', phase=phase, add_global_step=True)
+                self.logging_image(batch['prior'], tag='prior', phase=phase, add_global_step=True)
 
             if self.current_iters % self.configs.train.save_freq == 1 and flag:
                 self.tic = time.time()
@@ -993,14 +996,55 @@ class TrainerDiffusion(TrainerBase):
         self.reload_ema_model()
         self.ema_model.eval()
         self.freeze_model(self.ema_model)
-
-        indices = [int(self.base_diffusion.num_timesteps * x) for x in [0.25, 0.5, 0.75, 1]]
-        chn = 3
-        batch_size = self.configs.train.batch[1]
-        shape = (batch_size, chn,) + (self.configs.data.train.params.img_size,) * 2
         num_iters = 0
         total_iters = math.ceil(len(self.datasets[phase])/ self.configs.train.batch[1])
         sigmoid_layer = torch.nn.Sigmoid()
+        if self.configs.train.only_log_image_val:
+            for ii, data in enumerate(self.dataloaders[phase]):
+                data = self.prepare_data(data)
+                yt = self.base_diffusion.q_sample( 
+                    x_start=util_image.normalize_th(data['lq'], mean=0.5, std=0.5, reverse=False),
+                    t=torch.tensor([self.base_diffusion.num_timesteps-1,]*data['lq'].shape[0], device=f"cuda:{self.rank}")
+                )
+                
+                initial_mask = sigmoid_layer(self.model_mask(data['lq']))
+                initial_prior = sigmoid_layer(self.model_prior(data['lq']))
+
+                final_sample = self.base_diffusion.p_sample_loop(
+                    model = self.ema_model,
+                    shape = yt.shape,
+                    noise = yt,
+                    device=f"cuda:{self.rank}",
+                    clip_denoised = True,
+                    denoised_fn=None,
+                    progress = False,
+                    model_kwargs={
+                        'mask': initial_mask,
+                        'prior': initial_prior
+                    }
+                )
+                psnr_mean = 0
+                lpips_mean = 0
+                ssim_mean = 0
+                mask_recover = torch.where(final_sample['mask']>0.5,1,0)
+                mask_reshape = mask_recover.expand(data['lq'].shape[0],3, -1, -1)
+                prior_recover = final_sample['prior']
+                hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*final_sample['sample'] 
+                self.logging_image(data['gt'], tag="hq", phase=phase, add_global_step=False)
+                
+                self.logging_image(hq_pred, tag="pred", phase=phase, add_global_step=False)
+                        
+                self.logging_image(mask_recover.float(),tag="pred_mask",phase=phase, add_global_step=False)
+
+                self.logging_image( prior_recover,tag="pred_prior",phase=phase, add_global_step=False)
+                self.logging_image(mask_recover.float(),tag="pred_mask",phase=phase, add_global_step=False)
+
+                self.logging_image( initial_mask,tag="initial_mask",phase=phase, add_global_step=False)
+                self.logging_image( initial_prior,tag="initial_prior",phase=phase, add_global_step=False)
+                break
+            return
+
+
         for ii, data in enumerate(self.dataloaders[phase]):
             data = self.prepare_data(data)
             yt = self.base_diffusion.q_sample( 
@@ -1051,7 +1095,7 @@ class TrainerDiffusion(TrainerBase):
             # mask_reshape = mask_recover_last.expand(batch_size,3, -1, -1)
             # hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*im_recover_last 
             mask_recover = torch.where(final_sample['mask']>0.5,1,0)
-            mask_reshape = mask_recover.expand(batch_size,3, -1, -1)
+            mask_reshape = mask_recover.expand(data['lq'].shape[0],3, -1, -1)
             prior_recover = final_sample['prior']
             hq_pred = data['gt'] *  (1 - mask_reshape) +mask_reshape*final_sample['sample'] 
             lpips = self.lpips_loss((hq_pred-0.5)*2, (data['gt']-0.5)*2).sum().item()

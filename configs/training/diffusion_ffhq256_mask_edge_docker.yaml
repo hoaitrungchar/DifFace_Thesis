@@ -41,7 +41,7 @@ data:
       dataset_type: train
       dir_path: [/root/data/FFHQ/train]
       noise_path1: [/root/data/CelebA-HQ/train]
-      noise_path2: [/root/data/ImageNet/train]
+      noise_path2: [/root/data/ImageNet/train1,/root/data/ImageNet/train2,/root/data/ImageNet/train3,/root/data/ImageNet/train4,/root/data/ImageNet/train5,/root/data/ImageNet/train6,/root/data/ImageNet/train7,/root/data/ImageNet/train8,/root/data/ImageNet/train9,/root/data/ImageNet/train10,/root/data/ImageNet/train11,/root/data/ImageNet/train12,/root/data/ImageNet/train13]
       transform_type: default
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -147,11 +147,11 @@ train:
   prefetch_factor: 2
   iterations: 3438000
   weight_decay: 0
-  save_freq: 1719
-  val_freq: ${train.save_freq}
+  save_freq: 34380
+  val_freq: 34380
   milestones: [10000, 800000]
-  # log_freq: [3438, 3438, 50]
-  log_freq: [2,3,5]
+  log_freq: [3438, 34380, 50]
+  # log_freq: [2,3,5]
   tf_logging: False
   local_logging: True
   use_fp16: False

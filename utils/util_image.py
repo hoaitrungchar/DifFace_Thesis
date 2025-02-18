@@ -1044,7 +1044,7 @@ if __name__ == '__main__':
 
 
 
-def getpriorcanny(path, belowrange, overrange, dtype='float32'):
+def getpriorcanny(path, belowrange, overrange, dtype='float32', size=256):
     '''
     Read image.
     chn: 'rgb', 'bgr' or 'gray'
@@ -1052,6 +1052,7 @@ def getpriorcanny(path, belowrange, overrange, dtype='float32'):
         im: h x w x c, numpy tensor
     '''
     im = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)  # BGR, uint8
+    im = cv2.resize(im, (256, 256), interpolation=cv2.INTER_AREA)
     im = cv2.Canny(im,100,200)
 
     if dtype == 'float32':
