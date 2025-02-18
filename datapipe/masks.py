@@ -374,7 +374,9 @@ class IrregularNvidiaMask:
         """
         img: c x h x w, torch tensor
         """
-        h, w = img.shape[1:]
+        # h, w = img.shape[1:]
+        h=256
+        w=256
         index = random.randint(0,len(self.list_mask_path)-1)
         path  = self.list_mask_path[index]
         mask = util_image.imread(self.list_mask_path[index],chn='gray',dtype='float32')

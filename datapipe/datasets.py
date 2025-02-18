@@ -296,7 +296,9 @@ class MaskTrainingDataset(Dataset):
         self.length = length
         self.need_path = need_path
         self.transform = get_transforms(transform_type, transform_kwargs)
+        print(self.transform)
         self.transform_noise = get_transforms(transform_noise_type,transform_noise_kwargs)
+        print(self.transform_noise)
         self.kernel_gaussian = thv.transforms.GaussianBlur(kernel_size=kernel_gaussian_size)
         self.mask_generator = MixedMaskGenerator(**mask_kwargs)
         # self.mask_generator = IrregularNvidiaMask(folder_mask_path)
@@ -304,12 +306,12 @@ class MaskTrainingDataset(Dataset):
         self.noise_path1 = []
         self.noise_path2 = []
         self.img_size = img_size
-        if not self.noise_path1 is None and not self.noise_path2 is None:
+        if not noise_path1 is None and not noise_path2 is None:
             self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
             self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
-        elif not self.noise_path1 is None:
+        elif not noise_path1 is None:
             self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
-        elif not self.noise_path2 is None:
+        elif not noise_path2 is None:
             self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
         print(len(self.noise_path1))
         print(len(self.noise_path2))
@@ -353,6 +355,9 @@ class MaskTrainingDataset(Dataset):
         mask_reshape = mask_reshape.to(im.device, dtype=im.dtype)
         #Low quality = high quality *(mask_reshape) + (1-mask_reshape)*noise
         im_masked = im *  (mask_reshape) + (1-mask_reshape)*noise
+        # print(im.shape, end=' ')
+        # print(mask.shape)
+        # print(im_masked.shape)
         out_dict['lq'] = im_masked
         out_dict['mask'] = mask
         
