@@ -23,16 +23,19 @@ model:
 
 data:
   train:
-    type: PriorTraining
+    type: MaskTraining
     params:
-      dataset_type: train
-      dir_path: [/root/data/FFHQ/train]
-      noise_path1: [/root/data/CelebA-HQ/train]
-      noise_path2: [/root/data/ImageNet/train]
-      transform_type: default
+      dataset_type: train 
+      dir_path:  [/root/data/Places2/train_256]
+      noise_path1: [/root/data/ImageNet/train]
+      noise_path2: null
+      type_prior: edgeCanny
+      transform_type: crop_norm_train
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
         std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
       transform_noise_type: crop_norm_train
       transform_noise_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -45,23 +48,25 @@ data:
       kernel_gaussian_size: 3
       img_size: 256
       folder_mask_path: [/root/data/Mask/train]
-      type_prior: edgeCanny
       mask_kwargs:
         nvidia_mask_proba: 1
         nvidia_mask_kwargs:
           folder_mask_path: [/root/data/Mask/train]
           recursive: True
   val:
-    type: PriorTraining
+    type: MaskTraining
     params:
       dataset_type: val
-      dir_path: [/root/data/FFHQ/val]
-      noise_path1: [/root/data/CelebA-HQ/val]
-      noise_path2: [/root/data/ImageNet/val]
-      transform_type: default
+      dir_path: [/root/data/Places2/val_256]
+      noise_path1:  [/root/data/ImageNet/val] 
+      noise_path2: null
+      type_prior: edgeCanny
+      transform_type: crop_norm_val_test
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
         std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
       transform_noise_type: crop_norm_val_test
       transform_noise_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -73,7 +78,6 @@ data:
       recursive: False
       kernel_gaussian_size: 3
       img_size: 256
-      type_prior: edgeCanny
       folder_mask_path: [/root/data/Mask/val]
       mask_kwargs:
         nvidia_mask_proba: 1
@@ -87,7 +91,7 @@ train:
   lr_min: 1e-6
   batch: [32, 32]   # batchsize for training and validation
   microbatch: 32
-  num_workers: 24
+  num_workers: 16
   prefetch_factor: 2
   iterations: 859500
   weight_decay: 0
@@ -99,6 +103,6 @@ train:
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting
-group_name: FFHQ_edgeCanny
-name: batch_64||constant_lr||lr_start_1e-3_end_1e-5||no_aug_mask||kernel_gaussian_size_3
+group_name: Places2_edge
+name: batch_32||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
 wandb_id: null

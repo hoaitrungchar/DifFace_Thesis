@@ -105,4 +105,4 @@ train:
 project_name: Thesis_blind_image_inpainting
 group_name: ImageNet_edge
 name: batch_32||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
-wandb_id: null
+wandb_id: 2zloqy4h
