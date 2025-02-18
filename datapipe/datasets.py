@@ -59,7 +59,8 @@ def get_transforms(transform_type, kwargs):
     elif transform_type == 'crop_norm_train':
         transform = thv.transforms.Compose([
             thv.transforms.ToTensor(),
-            thv.transforms.Resize((kwargs.get('img_resize',None),kwargs.get('img_resize',None))),
+            # thv.transforms.Resize((kwargs.get('img_resize',None),kwargs.get('img_resize',None))),
+            thv.transforms.Resize((kwargs.get('img_resize',None))),
             thv.transforms.RandomCrop(
                 size=kwargs.get('crop_size', None),
                 ),
@@ -68,7 +69,8 @@ def get_transforms(transform_type, kwargs):
     elif transform_type == 'crop_norm_val_test':
         transform = thv.transforms.Compose([
             thv.transforms.ToTensor(),
-            thv.transforms.Resize((kwargs.get('img_resize',None),kwargs.get('img_resize',None))),
+            # thv.transforms.Resize((kwargs.get('img_resize',None),kwargs.get('img_resize',None))),
+            thv.transforms.Resize((kwargs.get('img_resize',None))),
             thv.transforms.CenterCrop(
                 size=kwargs.get('crop_size', None)
                 ),

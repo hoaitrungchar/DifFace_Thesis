@@ -1,0 +1,108 @@
+trainer:
+  target: trainer.TrainerPredictedPrior
+
+model:
+  target: models.SwinUnet.SwinUnet
+  params:
+    config: 1
+    patch_size: 4
+    num_classes: 1        
+    embed_dim: 96      
+    depths: [2,2,2,2]        
+    depths_decoder: [1, 2, 2, 2]
+    num_heads: [3, 6, 12, 24]
+    window_size: 4
+    qkv_bias: True
+    in_chans: 3
+    qk_scale: null
+    drop_rate: 0.
+    drop_path_rate: 0.1
+    ape: False
+    patch_norm: True
+    use_checkpoint: False
+
+data:
+  train:
+    type: MaskTraining
+    params:
+      dataset_type: train
+      dir_path: [/root/data/ImageNet/train]
+      noise_path1: [/root/data/Places2/train_256]
+      noise_path2: null
+      type_prior: edgeCanny
+      transform_type: crop_norm_train
+      transform_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
+      need_path: False
+      im_exts: [png, jpg, JPEG]
+      recursive: False
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path: [/root/data/Mask/train]
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: [/root/data/Mask/train]
+          recursive: True
+  val:
+    type: MaskTraining
+    params:
+      dataset_type: val
+      dir_path: [/root/data/ImageNet/val]
+      noise_path1: [/root/data/Places2/val_256]
+      noise_path2: null
+      type_prior: edgeCanny
+      transform_type: crop_norm_val_test
+      transform_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean: [0.0, 0.0, 0.0]
+        std: [1.0, 1.0, 1.0]
+        img_resize: 256
+        crop_size: 256
+      need_path: False
+      im_exts: [png, jpg, JPEG]
+      recursive: False
+      kernel_gaussian_size: 3
+      img_size: 256
+      folder_mask_path: [/root/data/Mask/val]
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: [/root/data/Mask/val]
+          recursive: True
+    
+
+train:
+  lr: 1e-4
+  lr_min: 1e-6
+  batch: [32, 32]   # batchsize for training and validation
+  microbatch: 32
+  num_workers: 24
+  prefetch_factor: 2
+  iterations: 859500
+  weight_decay: 0
+  save_freq: 1719
+  val_freq: ${train.save_freq}
+  log_freq: [1719, 17190, 50]
+  loss_type: BCE
+  tf_logging: False
+  local_logging: True
+
+project_name: Thesis_blind_image_inpainting
+group_name: ImageNet_edge
+name: batch_32||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
+wandb_id: null

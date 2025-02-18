@@ -1387,7 +1387,7 @@ class TrainerPredictedPrior(TrainerSR):
         print(total_iters, len(self.dataloaders[phase]) )
         sigmoid_layer=  torch.nn.Sigmoid()
         for ii, data in enumerate(self.dataloaders[phase]):
-            
+            data = self.prepare_data(data, phase='val')
             hq_pred = self.feed_data(data, phase='val')
             loss = self.get_loss_val(hq_pred, "BCE",data)
             
