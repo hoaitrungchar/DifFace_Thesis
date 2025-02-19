@@ -100,9 +100,10 @@ train:
   log_freq: [28180, 281800, 200]
   loss_type: BCE
   tf_logging: False
+  ema_rate: 0.999
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting
 group_name: Places2_edge
-name: batch_32||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
+name: batch_64||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
 wandb_id: null

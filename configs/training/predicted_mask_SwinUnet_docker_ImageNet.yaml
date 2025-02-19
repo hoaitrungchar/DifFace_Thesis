@@ -1,5 +1,5 @@
 trainer:
-  target: trainer.TrainerPredictedPrior
+  target: trainer.TrainerPredictedMask
 
 model:
   target: models.SwinUnet.SwinUnet
@@ -26,10 +26,9 @@ data:
     type: MaskTraining
     params:
       dataset_type: train
-      dir_path: [/root/data/ImageNet/train]
-      noise_path1: [/root/data/Places2/train_256]
+      dir_path:  [/root/data/Places2/train_256]
+      noise_path1: [/root/data/ImageNet/train]
       noise_path2: null
-      type_prior: edgeCanny
       transform_type: crop_norm_train
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -57,10 +56,9 @@ data:
     type: MaskTraining
     params:
       dataset_type: val
-      dir_path: [/root/data/ImageNet/val]
-      noise_path1: [/root/data/Places2/val_256]
+      dir_path: [/root/data/Places2/val_256]
+      noise_path1: [/root/data/ImageNet/val] 
       noise_path2: null
-      type_prior: edgeCanny
       transform_type: crop_norm_val_test
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -104,6 +102,6 @@ train:
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting
-group_name: ImageNet_edge
+group_name: ImageNet_mask
 name: batch_64||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
 wandb_id: null

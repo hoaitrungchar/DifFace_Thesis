@@ -6,7 +6,7 @@ docker run \
     --mount type=bind,source='/media/ml4u/Extreme SSD/log/TRUNG/DifFace_Thesis',target=/root/source \
     --mount type=bind,source='/media/ml4u/Extreme SSD/log/TRUNG/mask',target=/root/data/Mask \
     --mount type=bind,source='/media/ml4u/Extreme SSD/log/TRUNG/log',target=/root/log \
-    --gpus all -d -it --privileged --shm-size=28GB    hoaitrung/blind_inpainting
+    --gpus all -d -it --privileged --shm-size=48GB    hoaitrung/blind_inpainting
 
 
 # export CUDA_VISIBLE_DEVICES="1"
