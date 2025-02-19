@@ -360,11 +360,11 @@ class TrainerBase:
                         'log_step': {phase:self.log_step[phase] for phase in ['train', 'val']},
                         'log_step_img': {phase:self.log_step_img[phase] for phase in ['train', 'val']},
                         'state_dict': self.model.state_dict()}, ckpt_path)
-            wandb.save(ckpt_path,base_path=self.ckpt_dir)
+            # wandb.save(ckpt_path,base_path=self.ckpt_dir)
             if hasattr(self, 'ema_rate'):
                 ema_ckpt_path = self.ema_ckpt_dir / 'ema_model_{:d}.pth'.format(self.current_iters)
                 torch.save(self.ema_state, ema_ckpt_path)
-                wandb.save(ema_ckpt_path,base_path= self.ema_ckpt_dir)
+                # wandb.save(ema_ckpt_path,base_path= self.ema_ckpt_dir)
 
     def logging_image(self, im_tensor, tag, phase, add_global_step=False, nrow=8):
         """
@@ -1216,6 +1216,7 @@ class TrainerPredictedMask(TrainerSR):
         if hasattr(self.configs.train, 'ema_rate'):
             self.reload_ema_model()
             self.ema_model.eval()
+            self.freeze_model(self.ema_model)
         else:
             self.model.eval()
 
@@ -1378,6 +1379,7 @@ class TrainerPredictedPrior(TrainerSR):
         if hasattr(self.configs.train, 'ema_rate'):
             self.reload_ema_model()
             self.ema_model.eval()
+            self.freeze_model(self.ema_model)
         else:
             self.model.eval()
 

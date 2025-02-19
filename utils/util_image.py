@@ -557,6 +557,8 @@ def imread(path, chn='rgb', dtype='float32'):
     else:
         sys.exit('Please input corrected dtype: float32, float64 or uint8!')
 
+    # if im.shape[-1] == 3:
+    #     im = np.transpose(im, (2, 0, 1))
     return im
 
 def imwrite(im_in, path, chn='rgb', dtype_in='float32', qf=None):

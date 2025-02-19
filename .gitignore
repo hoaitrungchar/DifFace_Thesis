@@ -2,5 +2,7 @@ train_remote_wandb.py
 ckpts
 resume_ckpt
 train_remote_wandb_notorchrun.py
+train_remote_wandb_notorchrun_ImageNet.py
+train_remote_wandb_notorchrun_Places2.py
 rundockercommand.sh
 pretrained_checkpoint

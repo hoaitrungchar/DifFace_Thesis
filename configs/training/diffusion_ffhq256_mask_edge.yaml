@@ -143,7 +143,7 @@ train:
   # microbatch: 16
   batch: [64, 64]   # batchsize for training and validation
   microbatch: 64
-  num_workers: 48
+  num_workers: 64
   prefetch_factor: 2
   iterations: 860000
   weight_decay: 0

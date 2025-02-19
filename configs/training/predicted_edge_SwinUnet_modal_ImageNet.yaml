@@ -23,13 +23,12 @@ model:
 
 data:
   train:
-    type: MaskTraining
+    type: PriorTraining
     params:
-      dataset_type: train 
-      dir_path:  [/root/data/Places2/train_256]
-      noise_path1: [/root/data/ImageNet/train]
-      noise_path2: null
-      type_prior: edgeCanny
+      dataset_type: train
+      dir_path: [/root/data/ImageNet/train1,/root/data/ImageNet/train2,/root/data/ImageNet/train3,/root/data/ImageNet/train4,/root/data/ImageNet/train5,/root/data/ImageNet/train6,/root/data/ImageNet/train7,/root/data/ImageNet/train8,/root/data/ImageNet/train9,/root/data/ImageNet/train10,/root/data/ImageNet/train11,/root/data/ImageNet/train12,/root/data/ImageNet/train13]
+      noise_path1: [/root/data/Places2/train1, /root/data/Places2/train2,/root/data/Places2/train3,/root/data/Places2/train4,/root/data/Places2/train5,/root/data/Places2/train6,/root/data/Places2/train7,/root/data/Places2/train8,/root/data/Places2/train9,/root/data/Places2/train10,/root/data/Places2/train11,/root/data/Places2/train12,/root/data/Places2/train13,/root/data/Places2/train14,/root/data/Places2/train15,/root/data/Places2/train16,/root/data/Places2/train17,/root/data/Places2/train18,/root/data/Places2/train19]
+      noise_path2: null 
       transform_type: crop_norm_train
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -44,23 +43,23 @@ data:
         crop_size: 256
       need_path: False
       im_exts: [png, jpg, JPEG]
-      recursive: False
+      recursive: True
       kernel_gaussian_size: 3
       img_size: 256
       folder_mask_path: [/root/data/Mask/train]
+      type_prior: edgeCanny
       mask_kwargs:
         nvidia_mask_proba: 1
         nvidia_mask_kwargs:
           folder_mask_path: [/root/data/Mask/train]
           recursive: True
   val:
-    type: MaskTraining
+    type: PriorTraining
     params:
       dataset_type: val
-      dir_path: [/root/data/Places2/val_256]
-      noise_path1:  [/root/data/ImageNet/val] 
+      dir_path: [/root/data/ImageNet/val]
+      noise_path1: [/root/data/Places2/val]
       noise_path2: null
-      type_prior: edgeCanny
       transform_type: crop_norm_val_test
       transform_kwargs:
         mean: [0.0, 0.0, 0.0]
@@ -75,9 +74,10 @@ data:
         crop_size: 256
       need_path: False
       im_exts: [png, jpg, JPEG]
-      recursive: False
+      recursive: True
       kernel_gaussian_size: 3
       img_size: 256
+      type_prior: edgeCanny
       folder_mask_path: [/root/data/Mask/val]
       mask_kwargs:
         nvidia_mask_proba: 1
@@ -91,18 +91,18 @@ train:
   lr_min: 1e-6
   batch: [64, 64]   # batchsize for training and validation
   microbatch: 64
-  num_workers: 16
+  num_workers: 32
   prefetch_factor: 2
-  iterations: 14090000
+  iterations: 430000
   weight_decay: 0
-  save_freq: 28180
+  save_freq: 860
   val_freq: ${train.save_freq}
-  log_freq: [28180, 281800, 200]
+  log_freq: [860, 8600, 50]
   loss_type: BCE
-  tf_logging: False
+  tf_logging: True
   local_logging: True
 
 project_name: Thesis_blind_image_inpainting
-group_name: Places2_edge
-name: batch_32||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
+group_name: ImageNet_edge
+name: batch_64||cosine_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3||BCE_loss
 wandb_id: null
