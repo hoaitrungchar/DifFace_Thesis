@@ -74,7 +74,6 @@ def scan_files_from_folder(dir_paths, exts, recursive=True):
     '''
     exts = [exts, ] if isinstance(exts, str) else exts
     dir_paths = [dir_paths, ] if isinstance(dir_paths, str) else dir_paths
-
     file_paths = []
     for current_dir in dir_paths:
         for current_ext in exts:

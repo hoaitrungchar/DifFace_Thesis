@@ -34,11 +34,17 @@ import torch.multiprocessing as mp
 import torchvision.utils as vutils
 # from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-
+import wandb
+import torchmetrics
 class TrainerBase:
     def __init__(self, configs):
         self.configs = configs
+
+        wandb.login(key=os.getenv("WANDB_API_KEY"))
+        if self.configs.wandb_id is None:
+            wandb.init(project=configs.project_name, group= configs.group_name, name=configs.name)
+        else:
+            wandb.init(project=configs.project_name,id = self.configs.wandb_id, resume = "must")
 
         # setup distributed training: self.num_gpus, self.rank
         self.setup_dist()
@@ -331,7 +337,8 @@ class TrainerBase:
 
         # close the tensorboard
         self.close_logger()
-
+        wandb.finish()
+        
     def training_step(self, data):
         pass
 
@@ -495,6 +502,7 @@ class TrainerDifIR(TrainerBase):
         for params in lpips_loss.parameters():
             params.requires_grad_(False)
         lpips_loss.eval()
+        self.freeze_model(lpips_loss)
         if self.configs.train.compile.flag:
             if self.rank == 0:
                 self.logger.info("Begin compiling LPIPS Metric...")
@@ -505,6 +513,26 @@ class TrainerDifIR(TrainerBase):
 
         params = self.configs.diffusion.get('params', dict)
         self.base_diffusion = util_common.get_obj_from_str(self.configs.diffusion.target)(**params)
+        self.load_initial_model()
+
+    def load_initial_model(self):
+        params_mask = self.configs.get('model_mask_params', dict)
+        self.model_mask = util_common.get_obj_from_str(self.configs.model_mask_target)(**params_mask)
+        if self.num_gpus >1:
+            model_mask = nn.DataParallel(model_mask)
+        self.model_mask = self.model_mask.to('cuda')
+        if hasattr(self.configs, 'model_mask_ckpt') and self.configs.model_mask_ckpt is not None:
+            ckpt_path = self.configs.model_mask_ckpt
+            if self.rank == 0:
+                self.logger.info(f"Initializing model from {ckpt_path}")
+            ckpt = torch.load(ckpt_path, map_location=f"cuda:{self.rank}")
+            if 'state_dict' in ckpt:
+                ckpt = ckpt['state_dict']
+            util_net.reload_model(self.model_mask, ckpt)
+            print('load model mask completely')
+        self.model_mask.eval()
+        self.freeze_model(self.model_mask)
+        
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self):
@@ -742,7 +770,7 @@ class TrainerDifIR(TrainerBase):
         current_batchsize = data['gt'].shape[0]
         micro_batchsize = self.configs.train.microbatch
         num_grad_accumulate = math.ceil(current_batchsize / micro_batchsize)
-
+        sigmoid_layer = torch.nn.Sigmoid()
         for jj in range(0, current_batchsize, micro_batchsize):
             micro_data = {key:value[jj:jj+micro_batchsize,] for key, value in data.items()}
             last_batch = (jj+micro_batchsize >= current_batchsize)
@@ -751,6 +779,9 @@ class TrainerDifIR(TrainerBase):
                     size=(micro_data['gt'].shape[0],),
                     device=f"cuda:{self.rank}",
                     )
+            initial_mask = sigmoid_layer(self.model_mask(micro_data['lq_initial_mask']))
+            initial_mask = torch.where(initial_mask>0.5,1,0)
+            initial_mask = (initial_mask - self.configs.data.train.params.transform_kwargs.mean)/self.configs.data.train.params.transform_kwargs.std
             latent_downsamping_sf = 2**(len(self.configs.autoencoder.params.ddconfig.ch_mult) - 1)
             latent_resolution = micro_data['gt'].shape[-1] // latent_downsamping_sf
             if 'autoencoder' in self.configs:
@@ -764,7 +795,7 @@ class TrainerDifIR(TrainerBase):
             if self.configs.model.params.cond_lq:
                 model_kwargs = {'lq':micro_data['lq'],}
                 if 'mask' in micro_data:
-                    model_kwargs['mask'] = micro_data['mask']
+                    model_kwargs['mask'] = initial_mask
             else:
                 model_kwargs = None
             compute_losses = functools.partial(
@@ -786,6 +817,7 @@ class TrainerDifIR(TrainerBase):
             # make logging
             if last_batch:
                 self.log_step_train(losses, tt, micro_data, z_t, z0_pred.detach())
+            
 
         if self.configs.train.use_amp:
             self.amp_scaler.step(self.optimizer)
@@ -875,6 +907,7 @@ class TrainerDifIR(TrainerBase):
             if self.configs.train.use_ema_val:
                 self.reload_ema_model()
                 self.ema_model.eval()
+                self.freeze_model(self.ema_model)
             else:
                 self.model.eval()
 
@@ -890,6 +923,8 @@ class TrainerDifIR(TrainerBase):
             batch_size = self.configs.train.batch[1]
             num_iters_epoch = math.ceil(len(self.datasets[phase]) / batch_size)
             mean_psnr = mean_lpips = 0
+            mean_psnr_hq_pred = mean_lpips_hq_pred = 0 
+            sigmoid_layer = torch.nn.Sigmoid()
             for ii, data in enumerate(self.dataloaders[phase]):
                 data = self.prepare_data(data, phase='val')
                 if 'gt' in data:
@@ -897,10 +932,14 @@ class TrainerDifIR(TrainerBase):
                 else:
                     im_lq = data['lq']
                 num_iters = 0
+                initial_mask = sigmoid_layer(self.model_mask(data['lq_initial_mask']))
+                # initial_mask = torch.where(initial_mask>0.5,1,0)
+                initial_mask = (initial_mask - self.configs.data.val.params.transform_kwargs.mean)/self.configs.data.val.params.transform_kwargs.std
+
                 if self.configs.model.params.cond_lq:
                     model_kwargs = {'lq':data['lq'],}
                     if 'mask' in data:
-                        model_kwargs['mask'] = data['mask']
+                        model_kwargs['mask'] = initial_mask
                 else:
                     model_kwargs = None
                 tt = torch.tensor(
@@ -932,7 +971,7 @@ class TrainerDifIR(TrainerBase):
                             im_sr_all = torch.cat((im_sr_all, im_sr_progress), dim=1)
                     num_iters += 1
                     tt -= 1
-
+                    
                 if 'gt' in data:
                     mean_psnr += util_image.batch_PSNR(
                             sample_decode['sample'] * 0.5 + 0.5,
@@ -941,6 +980,19 @@ class TrainerDifIR(TrainerBase):
                             )
                     mean_lpips += self.lpips_loss(
                             sample_decode['sample'],
+                            im_gt,
+                            ).sum().item()
+                    mask_recover = torch.where(initial_mask>0,1,0)
+                    mask_reshape = mask_recover.expand(data['lq'].shape[0],3, -1, -1)
+                    hq_pred = data['gt'] *(mask_reshape) +(1-mask_reshape)*sample_decode['sample'] 
+
+                    mean_psnr_hq_pred += util_image.batch_PSNR(
+                            hq_pred * 0.5 + 0.5,
+                            im_gt * 0.5 + 0.5,
+                            ycbcr=self.configs.train.val_y_channel,
+                            )
+                    mean_lpips_hq_pred += self.lpips_loss(
+                            hq_pred,
                             im_gt,
                             ).sum().item()
 
@@ -955,6 +1007,7 @@ class TrainerDifIR(TrainerBase):
                             add_global_step=False,
                             nrow=len(indices),
                             )
+                    self.logging_image(hq_pred, tag='hq_pred', phase=phase, add_global_step=False)
                     if 'gt' in data:
                         self.logging_image(im_gt, tag='gt', phase=phase, add_global_step=False)
                     self.logging_image(im_lq, tag='lq', phase=phase, add_global_step=True)
@@ -962,10 +1015,14 @@ class TrainerDifIR(TrainerBase):
             if 'gt' in data:
                 mean_psnr /= len(self.datasets[phase])
                 mean_lpips /= len(self.datasets[phase])
-                self.logger.info(f'Validation Metric: PSNR={mean_psnr:5.2f}, LPIPS={mean_lpips:6.4f}...')
+                mean_psnr_hq_pred /= len(self.datasets[phase])
+                mean_lpips_hq_pred /= len(self.datasets[phase])
+                self.logger.info(f'Validation Metric: PSNR={mean_psnr:5.2f}, LPIPS={mean_lpips:6.4f}, PSNR_FINAL={mean_psnr_hq_pred:5.2f}, LPIPS_FINAL={mean_lpips_hq_pred:6.4f}')
                 self.logging_metric(mean_psnr, tag='PSNR', phase=phase, add_global_step=False)
                 self.logging_metric(mean_lpips, tag='LPIPS', phase=phase, add_global_step=True)
-
+                self.logging_metric(mean_psnr_hq_pred, tag='PSNR_FINAL', phase=phase, add_global_step=False)
+                self.logging_metric(mean_lpips_hq_pred, tag='LPIPS_FINAL', phase=phase, add_global_step=True)
+                wandb.log({"val/PSNR": mean_psnr, "val/LPIPS": mean_lpips, "val/PSNR_FINAL": mean_psnr_hq_pred  , "val/LPIPS_FINAL": mean_lpips_hq_pred, 'num_iterations': self.current_iters })
             self.logger.info("="*100)
 
             if not (self.configs.train.use_ema_val and hasattr(self.configs.train, 'ema_rate')):
@@ -1051,6 +1108,7 @@ class TrainerDifIRLPIPS(TrainerDifIR):
                             self.loss_mean['lpips'][jj].item(),
                             )
                 log_str += 'lr:{:.2e}'.format(self.optimizer.param_groups[0]['lr'])
+                wandb.log({'num_iterations': self.current_iters, 'mse':torch.mean(self.loss_mean['mse']), 'lpips':torch.mean(self.loss_mean['lpips']), 'learning_rate': self.optimizer.param_groups[0]['lr'] })
                 self.logger.info(log_str)
                 self.logging_metric(self.loss_mean, tag='Loss', phase=phase, add_global_step=True)
             if self.current_iters % self.configs.train.log_freq[1] == 0:

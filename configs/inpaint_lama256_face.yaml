@@ -5,7 +5,10 @@ autoencoder:
   target: ldm.models.autoencoder.VQModelTorch
   ckpt_path: weights/celeba256_vq_f4_dim3_face.pth
   use_fp16: True
+  tune_decoder: False
+  
   params:
+    lora_tune_decoder: False
     embed_dim: 3
     n_embed: 8192
     ddconfig:
@@ -49,6 +52,26 @@ model:
     cond_lq: True
     cond_mask: True
     lq_size: 256
+    
+model_mask_target: models.swinunet.SwinUnet
+model_mask_ckpt: /root/weights/FFHQ_mask_loss_000025565.pth
+model_mask_params:
+  config: 1
+  patch_size: 4
+  num_classes: 1        
+  embed_dim: 96      
+  depths: [2,2,2,2]        
+  depths_decoder: [1, 2, 2, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 4
+  qkv_bias: True
+  in_chans: 3
+  qk_scale: null
+  drop_rate: 0.
+  drop_path_rate: 0.1
+  ape: False
+  patch_norm: True
+  use_checkpoint: False
 
 diffusion:
   target: models.script_util.create_gaussian_diffusion
@@ -70,54 +93,62 @@ diffusion:
 
 data:
   train:
-    type: inpainting
+    type: blindinpainting
     params:
-      dir_path: ~
-      txt_file_path: /mnt/sfs-common/zsyue/database/FFHQ/files_txt/files256.txt
+      dir_path: /root/data/FFHQ/train
+      noise_path1: /root/data/CelebA-HQ/train
+      noise_path2: [/root/data/ImageNet/train1,/root/data/ImageNet/train2,/root/data/ImageNet/train3,/root/data/ImageNet/train4,/root/data/ImageNet/train5,/root/data/ImageNet/train6,/root/data/ImageNet/train7,/root/data/ImageNet/train8,/root/data/ImageNet/train9,/root/data/ImageNet/train10,/root/data/ImageNet/train11,/root/data/ImageNet/train12,/root/data/ImageNet/train13]
       transform_type: default
       transform_kwargs:
         mean: 0.5
         std: 0.5
       need_path: False
-      im_exts: png
-      recursive: False
+      transform_noise_type: crop_norm_train
+      transform_noise_kwargs:
+        mean: 0.5
+        std: 0.5
+        img_resize: 256
+        crop_size: 256
+      transform_initial_mask: default
+      transform_initial_kwargs:
+        mean: 0
+        std: 1
+      im_exts: [png, jpg, JPEG]
+      recursive: True
       mask_kwargs:
-        irregular_proba: 1
-        irregular_kwargs:
-          max_angle: 4
-          max_len: 200
-          max_width: 100
-          max_times: 5
-          min_times: 1
-
-        box_proba: 1
-        box_kwargs:
-          margin: 10
-          bbox_min_size: 30
-          bbox_max_size: 150
-          max_times: 4
-          min_times: 1
-
-        outpainting_proba: 1
-        outpainting_kwargs:
-          min_padding_percent: 0.04
-          max_padding_percent: 0.25
-          left_padding_prob: 0.5
-          top_padding_prob: 0.5
-          right_padding_prob: 0.5
-          bottom_padding_prob: 0.5
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: /root/data/Mask/train
+          recursive: True
+      
   val:
-    type: inpainting_val
+    type: blindinpainting
     params:
-      lq_path: testdata/inpainting/face/lq
-      gt_path: testdata/inpainting/face/hq
-      mask_path: testdata/inpainting/face/mask
+      dir_path: /root/data/FFHQ/val
+      noise_path1: /root/data/CelebA-HQ/val
+      noise_path2: /root/data/ImageNet/val
       transform_type: default
       transform_kwargs:
           mean: 0.5
           std: 0.5
-      im_exts: png
-      recursive: False
+      transform_noise_type: crop_norm_val_test
+      transform_noise_kwargs:
+        mean: 0.5
+        std: 0.5
+        img_resize: 256
+        crop_size: 256
+      transform_initial_mask: default
+      transform_initial_kwargs:
+        mean: 0
+        std: 1
+      im_exts: [png, jpg, JPEG]
+      recursive: True
+      mask_kwargs:
+        nvidia_mask_proba: 1
+        nvidia_mask_kwargs:
+          folder_mask_path: /root/data/Mask/val
+          recursive: True
+      
 
 train:
   # learning rate
@@ -126,14 +157,14 @@ train:
   lr_schedule: cosin
   warmup_iterations: 5000
   # dataloader
-  batch: [96, 2]                
-  microbatch: 12
-  num_workers: 6
+  batch: [24, 24]                
+  microbatch: 24
+  num_workers: 48
   prefetch_factor: 2            
   # optimization settings
   weight_decay: 0               
   ema_rate: 0.999
-  iterations: 400000            # total iterations
+  iterations: 500000            # total iterations
   # save logging
   save_freq: 10000
   log_freq: [200, 2000, 1]         # [training loss, training images, val images]
@@ -143,7 +174,7 @@ train:
   # validation settings
   use_ema_val: True            
   val_freq: ${train.save_freq}
-  val_y_channel: True
+  val_y_channel: False
   val_resolution: 256
   val_padding_mode: reflect
   # training setting
@@ -155,3 +186,7 @@ train:
     flag: False
     mode: reduce-overhead
 
+project_name: Thesis_blind_image_inpainting
+group_name: FFHQ_ResShift_mask
+name: batch_24|constant_lr||lr_start_1e-4_end_1e-6||no_aug_mask||kernel_gaussian_size_3
+wandb_id: l5jxzv8x

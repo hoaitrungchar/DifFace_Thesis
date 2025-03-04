@@ -18,7 +18,7 @@ from basicsr.data.realesrgan_dataset import RealESRGANDataset
 from .ffhq_degradation_dataset import FFHQDegradationDataset
 from .degradation_bsrgan.bsrgan_light import degradation_bsrgan_variant, degradation_bsrgan
 from .masks import MixedMaskGenerator
-
+import sys
 class LamaDistortionTransform:
     def __init__(self, kwargs):
         import albumentations as A
@@ -105,6 +105,26 @@ def get_transforms(transform_type, kwargs):
             util_image.ToTensor(),   # hwc --> chw
             thv.transforms.Normalize(mean=kwargs.get('mean', 0.5), std=kwargs.get('std', 0.5)),
         ])
+    elif transform_type == 'crop_norm_train':
+        transform = thv.transforms.Compose([
+            thv.transforms.ToTensor(),
+            # thv.transforms.Resize((kwargs.get('img_resize',None),kwargs.get('img_resize',None))),
+            thv.transforms.Resize((kwargs.get('img_resize',None))),
+            thv.transforms.RandomCrop(
+                size=kwargs.get('crop_size', None),
+                ),
+            thv.transforms.Normalize(mean=kwargs.get('mean', 0.5), std=kwargs.get('std', 0.5)),
+        ])
+    elif transform_type == 'crop_norm_val_test':
+        transform = thv.transforms.Compose([
+            thv.transforms.ToTensor(),
+            # thv.transforms.Resize((kwargs.get('img_resize',None),kwargs.get('img_resize',None))),
+            thv.transforms.Resize((kwargs.get('img_resize',None))),
+            thv.transforms.CenterCrop(
+                size=kwargs.get('crop_size', None)
+                ),
+            thv.transforms.Normalize(mean=kwargs.get('mean', 0.5), std=kwargs.get('std', 0.5)),
+        ])
     elif transform_type == 'lama_distortions':
         transform = thv.transforms.Compose([
                 LamaDistortionTransform(kwargs),
@@ -143,6 +163,8 @@ def create_dataset(dataset_config):
         dataset = BicubicFromSource(**dataset_config['params'])
     elif dataset_config['type'] == 'paired':
         dataset = PairedData(**dataset_config['params'])
+    elif dataset_config['type'] == 'blindinpainting':
+        dataset = DiffusionTrainingDataset(**dataset_config['params'])
     else:
         raise NotImplementedError(dataset_config['type'])
 
@@ -468,7 +490,6 @@ class InpaintingDataSet(Dataset):
 
         if self.need_path:
             out_dict['path'] = im_path
-
         return out_dict
 
     def reset_dataset(self):
@@ -530,6 +551,117 @@ class InpaintingDataSetVal(Dataset):
 
     def reset_dataset(self):
         self.file_paths = random.sample(self.file_paths_all, self.length)
+
+class DiffusionTrainingDataset(Dataset):
+    def __init__(
+            self,
+            dir_path,
+            noise_path1,
+            noise_path2,
+            transform_type,
+            transform_kwargs,
+            transform_noise_type,
+            transform_noise_kwargs,
+            transform_initial_mask,
+            transform_initial_kwargs,
+            mask_kwargs,
+            length=None,
+            need_path=False,
+            im_exts=['png', 'jpg', 'jpeg', 'JPEG', 'bmp'],
+            recursive=False,
+            img_size = 256,
+            type_prior=None,
+            kernel_gaussian_size=3,
+            ):
+        super().__init__()
+        file_paths_all=[]
+        file_paths_all += util_common.scan_files_from_folder(dir_path, im_exts, recursive)
+        print('len_file_path_all',len(file_paths_all))
+        self.file_paths = file_paths_all if length is None else random.sample(file_paths_all, length)
+        self.file_paths_all = file_paths_all
+        self.type_prior = type_prior
+        self.length = length
+        self.need_path = need_path
+        self.transform = get_transforms(transform_type, transform_kwargs)
+        self.transform_noise = get_transforms(transform_noise_type,transform_noise_kwargs)
+        self.kernel_gaussian = thv.transforms.GaussianBlur(kernel_size=kernel_gaussian_size)
+        self.mask_generator = MixedMaskGenerator(**mask_kwargs)
+        # self.mask_generator = IrregularNvidiaMask(folder_mask_path)
+        self.iter_i = 0
+        self.noise_path1 = []
+        self.noise_path2 = []
+        self.img_size = img_size
+        if not noise_path1 is None and not noise_path2 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        elif not noise_path1 is None:
+            self.noise_path1=util_common.scan_files_from_folder(noise_path1, im_exts, recursive)
+        elif not noise_path2 is None:
+            self.noise_path2=util_common.scan_files_from_folder(noise_path2, im_exts, recursive)
+        print(len(self.noise_path1))
+        print(len(self.noise_path2))
+        self.file_paths_noise=self.noise_path1+self.noise_path2
+        print('len_file_paths_noise',len(self.file_paths_noise))
+        self.transform_initial_kwargs = transform_initial_kwargs
+        self.mean = transform_kwargs.get('mean', 0.5)
+        self.std = transform_kwargs.get('std', 0.5)
+    def __len__(self):
+        return len(self.file_paths)
+
+    def sameple_noise(self):
+        noise = util_image.imread(self.file_paths_noise[random.randint(0,len(self.file_paths_noise)-1)], chn='rgb', dtype='float32')        
+        noise = self.transform_noise(noise)
+        return noise 
+    
+    def get_prior(self):
+        pass
+
+    def sample_initial_mask(self):
+        pass
+
+    def sample_initial_prior(self):
+        pass
+
+    
+    def __getitem__(self, index):
+        im_path = self.file_paths[index]
+        image = util_image.imread(im_path, chn='rgb', dtype='float32')
+        im = self.transform(image)        # c x h x w
+        out_dict = {'gt':im, }
+        self.iter_i+=1
+        
+        if not (self.type_prior is None):
+            if self.type_prior == 'edgeCanny':
+                edge_img=util_image.getpriorcanny(im_path,100,200)
+                edge_img = torch.tensor(edge_img)
+                out_dict['prior']= edge_img
+        mask = self.mask_generator(im, iter_i=self.iter_i)   # c x h x w
+        self.iter_i += 1
+        mask = torch.tensor(mask)
+        mask = 1-mask 
+        mask_reshape=self.kernel_gaussian(mask)
+        noise = self.sameple_noise()
+        if mask.shape[0] == 1:
+            mask_reshape = mask.expand(3, -1, -1)  
+        mask_reshape = mask_reshape.to(im.device, dtype=im.dtype)
+        im_masked = im *  (mask_reshape) + (1-mask_reshape)*noise
+        
+
+        out_dict['lq_initial_mask'] = (im_masked *self.std+self.mean -self.transform_initial_kwargs.get('mean', 0.5))/self.transform_initial_kwargs.get('std', 0.5)
+        out_dict['mask'] = (mask -self.mean) / self.std
+        out_dict['lq'] = im_masked
+
+        # print('lq_initial_mask_value',out_dict['lq_initial_mask'] )
+        # print('mask_value',out_dict['mask'] )
+        # print('lq_vaue',out_dict['lq'])
+        if self.need_path:
+            out_dict['path'] = im_path
+        # print(out_dict['lq'].shape, out_dict['lq'].shape,  out_dict['mask'] .shape)
+        return out_dict
+
+    def reset_dataset(self):
+        self.file_paths = random.sample(self.file_paths_all, self.length)
+
 
 class DegradedDataFromSource(Dataset):
     def __init__(
